@@ -16,5 +16,4 @@ For use external power supply (no USB) you need
 
 More info in Czech language: https://www.mylms.cz/text-arduino-hodiny-s-maticovym-displejem/
 
-See video below
-https://www.youtube.com/watch?v=HScHKPGg8lE
+See video: https://www.youtube.com/watch?v=HScHKPGg8lE
