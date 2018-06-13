@@ -2,21 +2,21 @@
 Name:		PixelClock.ino
 Created:	16.01.2018 20:56:49
 Last rev.:	13.06.2018 
-Author:	Petr
+Author:	mylms.cz
 */
 
 /*
 https://www.mylms.cz/text-arduino-hodiny-s-maticovym-displejem/
 
-D2 – BTN 1 (set internal_pullup)
-D3 – BTN 2 (set internal_pullup)
-D4 – matrix display, pin DIN
-D5 – matrix display, pin CLK
-D6 – matrix display, pin CS
-A4 – RTC module, pin SDA
-A5 – RTC module, pin SCL
-GND – common for all modules
-5V – common for all modules, 5V supply connected via 1N4148
+D2 â€“ BTN 1 (set internal_pullup)
+D3 â€“ BTN 2 (set internal_pullup)
+D4 â€“ matrix display, pin DIN
+D5 â€“ matrix display, pin CLK
+D6 â€“ matrix display, pin CS
+A4 â€“ RTC module, pin SDA
+A5 â€“ RTC module, pin SCL
+GND â€“ common for all modules
+5V â€“ common for all modules, 5V supply connected via 1N4148
 */
 
 #include <EEPROM.h>
@@ -174,7 +174,7 @@ void setup() {
 }
 
 void loop() {
-	//naètení vstupù do promìnných 
+	//naÃ¨tenÃ­ vstupÃ¹ do promÃ¬nnÃ½ch 
 	presentInput1 = digitalRead(BTN1);
 	presentInput2 = digitalRead(BTN2);
 
@@ -489,7 +489,7 @@ void SerialComm() {
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
 		}
 
-		//spláchnout buffer do hajzlu
+		//splÃ¡chnout buffer do hajzlu
 		Serial.flush();
 	}
 }
