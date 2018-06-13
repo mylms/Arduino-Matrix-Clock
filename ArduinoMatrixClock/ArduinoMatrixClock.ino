@@ -173,7 +173,7 @@ void setup() {
 }
 
 void loop() {
-	//na�ten� vstup� do prom�nn�ch 
+	//store input to var
 	presentInput1 = digitalRead(BTN1);
 	presentInput2 = digitalRead(BTN2);
 
@@ -208,7 +208,6 @@ void loop() {
 	case 2:
 		//menu 1
 		//set hours
-		//lc.setLed(2, 7, 2, true);	//show setting dot
 		WriteTime();
 
 		if (presentInput1 != lastInput1) {
@@ -238,7 +237,6 @@ void loop() {
 	case 3:
 		//menu 2
 		//set minutes
-		//lc.setLed(2, 7, 3, true);	//show setting dot
 		WriteTime();
 
 		if (presentInput1 != lastInput1) {
@@ -270,8 +268,6 @@ void loop() {
 	case 4:
 		//menu 3
 		//set brightnes
-		//lc.setLed(2, 7, 3, true);	//show setting dot
-
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
 			if (presentInput1) {
@@ -321,8 +317,8 @@ void loop() {
 
 	}
 
-	lastInput1 = presentInput1; //save actual state to last state
-	lastInput2 = presentInput2; //save actual state to last state
+	lastInput1 = presentInput1; //save current state to last state
+	lastInput2 = presentInput2; //save current state to last state
 
 	SerialComm();	//read data from PC
 }
