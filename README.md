@@ -1,10 +1,10 @@
 # Arduino-Matrix-Clock
 
-Simply Arduino Clock with LED matrix display 32 x 8 pix. In this sketch is used LedControl library (https://github.com/wayoda/LedControl).
+Simply Arduino Clock with LED matrix display 32 x 8 pix. In this sketch is LedControl library (https://github.com/wayoda/LedControl) used.
 
 - Arduino Nano
 - DS3231 module
-- 4x LED matrix with MAX7219 driver
+- 4x LED matrix with MAX7219 driver (used LedControl library)
 - 2x button
 
 For use external power supply (no USB) you need
