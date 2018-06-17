@@ -13,6 +13,9 @@ For use external power supply (no USB) you need
 
 ![alt Arduino Matrix Clock](https://www.mylms.cz/obrazky/elektronika/arduino-matrix-clock-1.jpg)
 
+![alt Arduino Matrix Clock - Schematics](https://www.mylms.cz/obrazky/elektronika/arduino-matrix-clock-9.png)
+
+
 
 More info in Czech language: https://www.mylms.cz/text-arduino-hodiny-s-maticovym-displejem/
 
