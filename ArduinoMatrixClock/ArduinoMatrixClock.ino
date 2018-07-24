@@ -1,21 +1,25 @@
 /*
-Name:		ArduinoMatrixClock.ino
-Created:	12.06.2018  20:56:49 
-Author:	mylms.cz
+Name:		PixelClock.ino
+Created:	16.01.2018 20:56:49
+Last rev.:	24.07.2018 
+Version:	1.1
+Author:	Petr
 */
 
 /*
 https://www.mylms.cz/text-arduino-hodiny-s-maticovym-displejem/
 
-D2 ï¿½ BTN 1 (set internal_pullup)
-D3 ï¿½ BTN 2 (set internal_pullup)
-D4 ï¿½ matrix display, pin DIN
-D5 ï¿½ matrix display, pin CLK
-D6 ï¿½ matrix display, pin CS
-A4 ï¿½ RTC module, pin SDA
-A5 ï¿½ RTC module, pin SCL
-GND ï¿½ common for all modules
-5V ï¿½ common for all modules, 5V supply connected via 1N4148
+https://github.com/mylms/Arduino-Matrix-Clock
+
+D2 - BTN 1 (set internal_pullup)
+D3 – BTN 2 (set internal_pullup)
+D4 – matrix display, pin DIN
+D5 – matrix display, pin CLK
+D6 – matrix display, pin CS
+A4 – RTC module, pin SDA
+A5 – RTC module, pin SCL
+GND – common for all modules
+5V – common for all modules, 5V supply connected via 1N4148
 */
 
 #include <EEPROM.h>
@@ -46,105 +50,105 @@ bool presentInput2; //actual state of input #2
 byte systemState;
 
 //chars
-byte znaky[95][8] = {
-{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },   // U+0020 (space)
-{ 0x18, 0x3C, 0x3C, 0x18, 0x18, 0x00, 0x18, 0x00 },   // U+0021 (!)
-{ 0x36, 0x36, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },   // U+0022 (")
-{ 0x36, 0x36, 0x7F, 0x36, 0x7F, 0x36, 0x36, 0x00 },   // U+0023 (#)
-{ 0x0C, 0x3E, 0x03, 0x1E, 0x30, 0x1F, 0x0C, 0x00 },   // U+0024 ($)
-{ 0x00, 0x63, 0x33, 0x18, 0x0C, 0x66, 0x63, 0x00 },   // U+0025 (%)
-{ 0x1C, 0x36, 0x1C, 0x6E, 0x3B, 0x33, 0x6E, 0x00 },   // U+0026 (&)
-{ 0x06, 0x06, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00 },   // U+0027 (')
-{ 0x18, 0x0C, 0x06, 0x06, 0x06, 0x0C, 0x18, 0x00 },   // U+0028 (()
-{ 0x06, 0x0C, 0x18, 0x18, 0x18, 0x0C, 0x06, 0x00 },   // U+0029 ())
-{ 0x00, 0x66, 0x3C, 0xFF, 0x3C, 0x66, 0x00, 0x00 },   // U+002A (*)
-{ 0x00, 0x0C, 0x0C, 0x3F, 0x0C, 0x0C, 0x00, 0x00 },   // U+002B (+)
-{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C, 0x06 },   // U+002C (,)
-{ 0x00, 0x00, 0x00, 0x3F, 0x00, 0x00, 0x00, 0x00 },   // U+002D (-)
-{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C, 0x00 },   // U+002E (.)
-{ 0x60, 0x30, 0x18, 0x0C, 0x06, 0x03, 0x01, 0x00 },   // U+002F (/)
-{ 0x3E, 0x63, 0x73, 0x7B, 0x6F, 0x67, 0x3E, 0x00 },   // U+0030 (0)
-{ 0x0C, 0x0E, 0x0C, 0x0C, 0x0C, 0x0C, 0x3F, 0x00 },   // U+0031 (1)
-{ 0x1E, 0x33, 0x30, 0x1C, 0x06, 0x33, 0x3F, 0x00 },   // U+0032 (2)
-{ 0x1E, 0x33, 0x30, 0x1C, 0x30, 0x33, 0x1E, 0x00 },   // U+0033 (3)
-{ 0x38, 0x3C, 0x36, 0x33, 0x7F, 0x30, 0x78, 0x00 },   // U+0034 (4)
-{ 0x3F, 0x03, 0x1F, 0x30, 0x30, 0x33, 0x1E, 0x00 },   // U+0035 (5)
-{ 0x1C, 0x06, 0x03, 0x1F, 0x33, 0x33, 0x1E, 0x00 },   // U+0036 (6)
-{ 0x3F, 0x33, 0x30, 0x18, 0x0C, 0x0C, 0x0C, 0x00 },   // U+0037 (7)
-{ 0x1E, 0x33, 0x33, 0x1E, 0x33, 0x33, 0x1E, 0x00 },   // U+0038 (8)
-{ 0x1E, 0x33, 0x33, 0x3E, 0x30, 0x18, 0x0E, 0x00 },   // U+0039 (9)
-{ 0x00, 0x0C, 0x0C, 0x00, 0x00, 0x0C, 0x0C, 0x00 },   // U+003A (:)
-{ 0x00, 0x0C, 0x0C, 0x00, 0x00, 0x0C, 0x0C, 0x06 },   // U+003B (//)
-{ 0x18, 0x0C, 0x06, 0x03, 0x06, 0x0C, 0x18, 0x00 },   // U+003C (<)
-{ 0x00, 0x00, 0x3F, 0x00, 0x00, 0x3F, 0x00, 0x00 },   // U+003D (=)
-{ 0x06, 0x0C, 0x18, 0x30, 0x18, 0x0C, 0x06, 0x00 },   // U+003E (>)
-{ 0x1E, 0x33, 0x30, 0x18, 0x0C, 0x00, 0x0C, 0x00 },   // U+003F (?)
-{ 0x3E, 0x63, 0x7B, 0x7B, 0x7B, 0x03, 0x1E, 0x00 },   // U+0040 (@)
-{ 0x0C, 0x1E, 0x33, 0x33, 0x3F, 0x33, 0x33, 0x00 },   // U+0041 (A)
-{ 0x3F, 0x66, 0x66, 0x3E, 0x66, 0x66, 0x3F, 0x00 },   // U+0042 (B)
-{ 0x3C, 0x66, 0x03, 0x03, 0x03, 0x66, 0x3C, 0x00 },   // U+0043 (C)
-{ 0x1F, 0x36, 0x66, 0x66, 0x66, 0x36, 0x1F, 0x00 },   // U+0044 (D)
-{ 0x7F, 0x46, 0x16, 0x1E, 0x16, 0x46, 0x7F, 0x00 },   // U+0045 (E)
-{ 0x7F, 0x46, 0x16, 0x1E, 0x16, 0x06, 0x0F, 0x00 },   // U+0046 (F)
-{ 0x3C, 0x66, 0x03, 0x03, 0x73, 0x66, 0x7C, 0x00 },   // U+0047 (G)
-{ 0x33, 0x33, 0x33, 0x3F, 0x33, 0x33, 0x33, 0x00 },   // U+0048 (H)
-{ 0x1E, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x1E, 0x00 },   // U+0049 (I)
-{ 0x78, 0x30, 0x30, 0x30, 0x33, 0x33, 0x1E, 0x00 },   // U+004A (J)
-{ 0x67, 0x66, 0x36, 0x1E, 0x36, 0x66, 0x67, 0x00 },   // U+004B (K)
-{ 0x0F, 0x06, 0x06, 0x06, 0x46, 0x66, 0x7F, 0x00 },   // U+004C (L)
-{ 0x63, 0x77, 0x7F, 0x7F, 0x6B, 0x63, 0x63, 0x00 },   // U+004D (M)
-{ 0x63, 0x67, 0x6F, 0x7B, 0x73, 0x63, 0x63, 0x00 },   // U+004E (N)
-{ 0x1C, 0x36, 0x63, 0x63, 0x63, 0x36, 0x1C, 0x00 },   // U+004F (O)
-{ 0x3F, 0x66, 0x66, 0x3E, 0x06, 0x06, 0x0F, 0x00 },   // U+0050 (P)
-{ 0x1E, 0x33, 0x33, 0x33, 0x3B, 0x1E, 0x38, 0x00 },   // U+0051 (Q)
-{ 0x3F, 0x66, 0x66, 0x3E, 0x36, 0x66, 0x67, 0x00 },   // U+0052 (R)
-{ 0x1E, 0x33, 0x07, 0x0E, 0x38, 0x33, 0x1E, 0x00 },   // U+0053 (S)
-{ 0x3F, 0x2D, 0x0C, 0x0C, 0x0C, 0x0C, 0x1E, 0x00 },   // U+0054 (T)
-{ 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x3F, 0x00 },   // U+0055 (U)
-{ 0x33, 0x33, 0x33, 0x33, 0x33, 0x1E, 0x0C, 0x00 },   // U+0056 (V)
-{ 0x63, 0x63, 0x63, 0x6B, 0x7F, 0x77, 0x63, 0x00 },   // U+0057 (W)
-{ 0x63, 0x63, 0x36, 0x1C, 0x1C, 0x36, 0x63, 0x00 },   // U+0058 (X)
-{ 0x33, 0x33, 0x33, 0x1E, 0x0C, 0x0C, 0x1E, 0x00 },   // U+0059 (Y)
-{ 0x7F, 0x63, 0x31, 0x18, 0x4C, 0x66, 0x7F, 0x00 },   // U+005A (Z)
-{ 0x1E, 0x06, 0x06, 0x06, 0x06, 0x06, 0x1E, 0x00 },   // U+005B ([)
-{ 0x03, 0x06, 0x0C, 0x18, 0x30, 0x60, 0x40, 0x00 },   // U+005C (\)
-{ 0x1E, 0x18, 0x18, 0x18, 0x18, 0x18, 0x1E, 0x00 },   // U+005D (])
-{ 0x08, 0x1C, 0x36, 0x63, 0x00, 0x00, 0x00, 0x00 },   // U+005E (^)
-{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF },   // U+005F (_)
-{ 0x0C, 0x0C, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00 },   // U+0060 (`)
-{ 0x00, 0x00, 0x1E, 0x30, 0x3E, 0x33, 0x6E, 0x00 },   // U+0061 (a)
-{ 0x07, 0x06, 0x06, 0x3E, 0x66, 0x66, 0x3B, 0x00 },   // U+0062 (b)
-{ 0x00, 0x00, 0x1E, 0x33, 0x03, 0x33, 0x1E, 0x00 },   // U+0063 (c)
-{ 0x38, 0x30, 0x30, 0x3e, 0x33, 0x33, 0x6E, 0x00 },   // U+0064 (d)
-{ 0x00, 0x00, 0x1E, 0x33, 0x3f, 0x03, 0x1E, 0x00 },   // U+0065 (e)
-{ 0x1C, 0x36, 0x06, 0x0f, 0x06, 0x06, 0x0F, 0x00 },   // U+0066 (f)
-{ 0x00, 0x00, 0x6E, 0x33, 0x33, 0x3E, 0x30, 0x1F },   // U+0067 (g)
-{ 0x07, 0x06, 0x36, 0x6E, 0x66, 0x66, 0x67, 0x00 },   // U+0068 (h)
-{ 0x0C, 0x00, 0x0E, 0x0C, 0x0C, 0x0C, 0x1E, 0x00 },   // U+0069 (i)
-{ 0x30, 0x00, 0x30, 0x30, 0x30, 0x33, 0x33, 0x1E },   // U+006A (j)
-{ 0x07, 0x06, 0x66, 0x36, 0x1E, 0x36, 0x67, 0x00 },   // U+006B (k)
-{ 0x0E, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x1E, 0x00 },   // U+006C (l)
-{ 0x00, 0x00, 0x33, 0x7F, 0x7F, 0x6B, 0x63, 0x00 },   // U+006D (m)
-{ 0x00, 0x00, 0x1F, 0x33, 0x33, 0x33, 0x33, 0x00 },   // U+006E (n)
-{ 0x00, 0x00, 0x1E, 0x33, 0x33, 0x33, 0x1E, 0x00 },   // U+006F (o)
-{ 0x00, 0x00, 0x3B, 0x66, 0x66, 0x3E, 0x06, 0x0F },   // U+0070 (p)
-{ 0x00, 0x00, 0x6E, 0x33, 0x33, 0x3E, 0x30, 0x78 },   // U+0071 (q)
-{ 0x00, 0x00, 0x3B, 0x6E, 0x66, 0x06, 0x0F, 0x00 },   // U+0072 (r)
-{ 0x00, 0x00, 0x3E, 0x03, 0x1E, 0x30, 0x1F, 0x00 },   // U+0073 (s)
-{ 0x08, 0x0C, 0x3E, 0x0C, 0x0C, 0x2C, 0x18, 0x00 },   // U+0074 (t)
-{ 0x00, 0x00, 0x33, 0x33, 0x33, 0x33, 0x6E, 0x00 },   // U+0075 (u)
-{ 0x00, 0x00, 0x33, 0x33, 0x33, 0x1E, 0x0C, 0x00 },   // U+0076 (v)
-{ 0x00, 0x00, 0x63, 0x6B, 0x7F, 0x7F, 0x36, 0x00 },   // U+0077 (w)
-{ 0x00, 0x00, 0x63, 0x36, 0x1C, 0x36, 0x63, 0x00 },   // U+0078 (x)
-{ 0x00, 0x00, 0x33, 0x33, 0x33, 0x3E, 0x30, 0x1F },   // U+0079 (y)
-{ 0x00, 0x00, 0x3F, 0x19, 0x0C, 0x26, 0x3F, 0x00 },   // U+007A (z)
-{ 0x38, 0x0C, 0x0C, 0x07, 0x0C, 0x0C, 0x38, 0x00 },   // U+007B ({)
-{ 0x18, 0x18, 0x18, 0x00, 0x18, 0x18, 0x18, 0x00 },   // U+007C (|)
-{ 0x07, 0x0C, 0x0C, 0x38, 0x0C, 0x0C, 0x07, 0x00 },   // U+007D (})
-{ 0x6E, 0x3B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },   // U+007E (~)
+const uint64_t symbols[] = {
+	0x0000000000000000,
+	0x0018180000181800,
+	0x003f66663e66663f,
+	0x000f06161e16467f,
+	0x006666667e666666,
+	0x007f66460606060f,
+	0x0063636b7f7f7763,
+	0x003c66701c0e663c,
+	0x00182c0c0c3e0c08,
+	0x000f06666e3b0000,
+	0x003e676f7b73633e,
+	0x007e181818181c18,
+	0x007e660c3860663c,
+	0x003c66603860663c,
+	0x0078307f33363c38,
+	0x003c6660603e067e,
+	0x003c66663e060c38,
+	0x001818183060667e,
+	0x003c66663c66663c,
+	0x001c30607c66663c,
+	0x003c66666e76663c,
+	0x007e1818181c1818,
+	0x007e060c3060663c,
+	0x003c66603860663c,
+	0x0030307e32343830,
+	0x003c6660603e067e,
+	0x003c66663e06663c,
+	0x001818183030667e,
+	0x003c66663c66663c,
+	0x003c66607c66663c,
+	0x1c2222222222221c,
+	0x1c08080808080c08,
+	0x3e0408102020221c,
+	0x1c2220201820221c,
+	0x20203e2224283020,
+	0x1c2220201e02023e,
+	0x1c2222221e02221c,
+	0x040404081020203e,
+	0x1c2222221c22221c,
+	0x1c22203c2222221c,
+	0x001c22262a32221c,
+	0x003e080808080c08,
+	0x003e04081020221c,
+	0x001c22201008103e,
+	0x0010103e12141810,
+	0x001c2220201e023e,
+	0x001c22221e020418,
+	0x000404040810203e,
+	0x001c22221c22221c,
+	0x000c10203c22221c,
+	0x003c24242424243c,
+	0x0020202020202020,
+	0x003c04043c20203c,
+	0x003c20203c20203c,
+	0x002020203c242424,
+	0x003c20203c04043c,
+	0x003c24243c04043c,
+	0x002020202020203c,
+	0x003c24243c24243c,
+	0x003c20203c24243c,
+	0x0000ff0000ff0000,
+	0x00003fc0c03f0000,
+	0x0000cf3030cf0000,
+	0x00000ff0f00f0000,
+	0x0000f30c0cf30000,
+	0x000033cccc330000,
+	0x0000c33c3cc30000,
+	0x000003fcfc030000,
+	0x0000fc0303fc0000,
+	0x00003cc3c33c0000,
+	0x0000000000000000,
+	0x1818000000000000,
+	0x0000181800000000,
+	0x1818181800000000,
+	0x0000000018180000,
+	0x1818000018180000,
+	0x0000181818180000,
+	0x1818181818180000,
+	0x0000000000001818,
+	0x1818000000001818,
+	0x0000000000000000,
+	0x0000001818000000,
+	0x030300000000c0c0,
+	0x030300181800c0c0,
+	0xc3c300000000c3c3,
+	0xc3c300181800c3c3,
+	0xdbdb00000000dbdb,
+	0xdbdb00181800dbdb,
+	0xdbdb00c3c300dbdb,
+	0xdbdb00dbdb00dbdb
 };
 
+byte symbolsLenght = sizeof(symbols) / 80;	//count numbers of symbols
+
+//default values...but they are load from EEPROM
 byte bright = 0;
+byte font = 1;
+byte dotStyle = 2;
 bool showDots;
 
 void setup() {
@@ -157,6 +161,24 @@ void setup() {
 	pinMode(BTN2, INPUT_PULLUP);
 
 	bright = EEPROM.read(0);	//load light intensity from EEPROM
+	if (bright < 0 || bright > 15) {
+		//in case variable out of range
+		bright = 7;
+	}
+
+	font = EEPROM.read(1);	//load font style from EEPROM
+	if (font < 0 || font > symbolsLenght - 1) {
+		//in case variable out of range
+		font = 1;
+	}
+
+	dotStyle = EEPROM.read(2);	//load dot style from EEPROM
+	if (dotStyle < 0 || dotStyle > 2) {
+		//in case variable out of range
+		dotStyle = 2;
+	}
+
+
 	delay(10);
 
 	//SET ALL DISPLAYS
@@ -198,26 +220,31 @@ void loop() {
 
 	case 1:
 		if (presentInput1 && presentInput2) {
-			systemState = 2; //Go to menu
-			
-			DrawSymbol(1, 0, 0);	//space
-			DrawSymbol(0, 72 - 32, 0);	//H
+			//NEXT
+			systemState++; //Go to menu
+			DrawSymbol(3, 0);	//space
+			DrawSymbol(2, 0);	//space
+			DrawSymbol(1, 0);	//space
+			DrawSymbol(0, 4);	//H
 		}
 		break;
 
 	case 2:
 		//menu 1
-		//set hours
+		//set HOURS
 		WriteTime();
 
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
 			if (presentInput1) {
 				//rising edge detected
-				systemState = 3;
 
-				DrawSymbol(3, 77 - 32, 0);	//M
-				DrawSymbol(2, 0, 0);	//space
+				//NEXT
+				systemState++;
+				DrawSymbol(3, 6);	//M
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, 0);	//space
+				DrawSymbol(0, 0);	//space
 			}
 		}
 
@@ -235,20 +262,21 @@ void loop() {
 		break;
 
 	case 3:
-		//menu 2
-		//set minutes
+		//menu 3
+		//set MINUTES
 		WriteTime();
 
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
 			if (presentInput1) {
 				//rising edge detected
-				systemState = 4;
 
-				DrawSymbol(3, 66 - 32, 0);	//B
-				DrawSymbol(2, 0, 0);	//space
-				DrawSymbol(0, (bright % 10) + 16, 1);	//actual light intensity
-				DrawSymbol(1, (bright / 10) + 16, 1);	//actual light intensity
+				//NEXT
+				systemState++;
+				DrawSymbol(3, 3);	//F
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (font / 10) + (font * 10));	//actual font
+				DrawSymbol(0, (font % 10) + (font * 10));	//actual font
 			}
 		}
 
@@ -266,18 +294,93 @@ void loop() {
 		break;
 
 	case 4:
-		//menu 3
-		//set brightnes
+		//menu 4
+		//set FONT
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
 			if (presentInput1) {
 				//rising edge detected
-				systemState = 5;
 
-				DrawSymbol(3, 83 - 32, 0);	//S
-				DrawSymbol(2, 116 - 32, 0);	//t
-				DrawSymbol(1, 114 - 32, 0);	//r
-				DrawSymbol(0, 116 - 32, 0);	//t
+				//NEXT
+				systemState++;
+				DrawSymbol(3, 1);	//:
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (dotStyle / 10) + 10);	//actual dot style
+				DrawSymbol(0, (dotStyle % 10) + 10);	//actual dot style
+			}
+		}
+
+		if (presentInput2 != lastInput2) {
+			//change detected BTN2
+			if (presentInput2) {
+				//rising edge detected
+				//add hour
+				font++;
+				if (font > symbolsLenght - 1) {
+					font = 1;
+				}
+
+				DrawSymbol(3, 3);	//F
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (font / 10) + (font * 10));	//actual font
+				DrawSymbol(0, (font % 10) + (font * 10));	//actual font
+
+				delay(25);
+			}
+		}
+		break;
+
+	case 5:
+		//menu 5
+		//set DOT STYLE
+		if (presentInput1 != lastInput1) {
+			//change detected BTN1
+			if (presentInput1) {
+				//rising edge detected
+
+				//NEXT
+				systemState++;
+				DrawSymbol(3, 2);	//B
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (bright / 10) + 10);	//actual light intensity
+				DrawSymbol(0, (bright % 10) + 10);	//actual light intensity
+			}
+		}
+
+		if (presentInput2 != lastInput2) {
+			//change detected BTN2
+			if (presentInput2) {
+				//rising edge detected
+				//add hour
+				dotStyle++;
+				if (dotStyle > 2) {
+					dotStyle = 0;
+				}
+
+				DrawSymbol(3, 1);	//:
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (dotStyle / 10) + 10);	//actual dot style
+				DrawSymbol(0, (dotStyle % 10) + 10);	//actual dot style
+
+				delay(25);
+			}
+		}
+		break;
+
+	case 6:
+		//menu 5
+		//set BRIGHTNES
+		if (presentInput1 != lastInput1) {
+			//change detected BTN1
+			if (presentInput1) {
+				//rising edge detected
+
+				//NEXT
+				systemState++;
+				DrawSymbol(3, 7);	//S
+				DrawSymbol(2, 8);	//t
+				DrawSymbol(1, 9);	//r
+				DrawSymbol(0, 8);	//t
 			}
 		}
 
@@ -290,25 +393,34 @@ void loop() {
 				if (bright > 15) {
 					bright = 0;			
 				}
-
-				DrawSymbol(0, (bright % 10) + 16, 1);	//actual light intensity
-				DrawSymbol(1, (bright / 10) + 16, 1);	//actual light intensity
+				
+				DrawSymbol(3, 2);	//B
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (bright / 10) + 10);	//actual light intensity
+				DrawSymbol(0, (bright % 10) + 10);	//actual light intensity
 
 				for (byte address = 0; address<devices; address++) {
 					lc.setIntensity(address, bright);	//set light intensity 0 - min, 15 - max
 				}
+
+				delay(25);
 			}
 		}
 		break;
 
-	case 5:
-		//menu 4
+
+
+	case 7:
+		//menu 6
+		//EXIT
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
 			if (presentInput1) {
 				//rising edge detected
 				SetRtc(0, minute, hour, dayOfWeek, dayOfMonth, month, year);	//set time and zero second
 				EEPROM.write(0, bright);	//store actual light intensity to addr 0
+				EEPROM.write(1, font);	//store actual font to addr 1
+				EEPROM.write(2, dotStyle);	//store actual font to addr 1
 				systemState = 0;
 			}
 		}
@@ -323,50 +435,73 @@ void loop() {
 	SerialComm();	//read data from PC
 }
 
-void GetButton() {
-	DrawSymbol(3, 76 - 32, 0);	//L
-	DrawSymbol(2, 77 - 32, 0);	//M
-	DrawSymbol(1, 83 - 32, 0);	//S
-	DrawSymbol(0, 1, 0);		//!
-}
-
 void WriteTime() {
+	byte storedFont = font;	//store actual seting during MENU
+
+	if (systemState > 0) {
+		//reserve font in menu
+		font = 1;
+	}
+
 	//write time to matrix display
 	if (systemState == 0 || systemState == 2) {
-		DrawSymbol(2, (hour % 10) + 16, 0);
-		DrawSymbol(3, (hour / 10) + 16, 0);
+		DrawSymbol(2, (hour % 10) + (font * 10));
+		DrawSymbol(3, (hour / 10) + (font * 10));
 	}
 
 	if (systemState == 0 || systemState == 3) {
-		DrawSymbol(0, (minute % 10) + 16, 1);
-		DrawSymbol(1, (minute / 10) + 16, 1);
+		DrawSymbol(0, (minute % 10) + (font * 10));
+		DrawSymbol(1, (minute / 10) + (font * 10));
 	}
-	
-	//blinking dots on display
-	lc.setLed(2, 1, 7, showDots);  //addr, row, column
-	lc.setLed(2, 2, 7, showDots);
-	lc.setLed(2, 5, 7, showDots);
-	lc.setLed(2, 6, 7, showDots);
 
-	showDots = !showDots;
+	if (systemState == 0) {
+		//TIME
+		switch (dotStyle) {
+		case 0:
+			showDots = false;	//hide dots
+			break;
+		case 1:
+			showDots = true;	//show dots
+			break;
+		case 2:
+			showDots = !showDots;	//blinking
+			break;
+		}
+	}
+	else{
+		//MENU
+		showDots = false;	//hide dots
+	}
+
+	font = storedFont;
 }
 
 void Intro() {
-	DrawSymbol(3, 76-32, 0);	//L
-	DrawSymbol(2, 77-32, 0);	//M
-	DrawSymbol(1, 83-32, 0);	//S
-	DrawSymbol(0, 1, 0);		//!
+	DrawSymbol(3, 5);	//L
+	DrawSymbol(2, 6);	//M
+	DrawSymbol(1, 7);	//S
+	DrawSymbol(0, 0);	//!
+
+	//DrawSymbol(0, (symbolsLenght % 10) + 10);	//actual light intensity
+	//DrawSymbol(1, (symbolsLenght / 10) + 10);	//actual light intensity
 	delay(5000);
 }
 
-void DrawSymbol(byte adr, byte symbol, byte offset) {
+void DrawSymbol(byte adr, byte symbol) {
 	//draw symbol
 	//offset move the symbol to right side
 
-	for (int i = 0; i <= 7; i++) {
-		byte dataRow = znaky[symbol][i];
-		dataRow = ByteRevers(dataRow) >> offset;
-		lc.setRow(adr, i, dataRow);
+	for (int i = 0; i < 8; i++) {
+		byte row = (symbols[symbol] >> i * 8) & 0xFF;
+		lc.setRow(adr, i, ByteRevers(row));
+
+		//blinking dots on display
+		if (adr == 2 && dotStyle > 0){
+			if (i == 1) lc.setLed(2, 1, 7, showDots);  //addr, row, column
+			if (i == 2) lc.setLed(2, 2, 7, showDots);
+			if (i == 5) lc.setLed(2, 5, 7, showDots);
+			if (i == 6) lc.setLed(2, 6, 7, showDots);
+		}
 	}
 }
 
@@ -484,7 +619,7 @@ void SerialComm() {
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
 		}
 
-		//splï¿½chnout buffer do hajzlu
+		//flush serial data
 		Serial.flush();
 	}
 }
