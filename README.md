@@ -19,6 +19,7 @@ Menu:
 - f: Font (show nr of font in select font style)
 - :: Dot style (0 - hide, 1 - show, 2 - blinking)
 - b: Backlight intensity
+- D: Show date (how many second in one minute is date shown) (new)
 - T1: Font turning 1 (turn each character) (new)
 - T2: Font turning 2 (turn all diplay) (new)
 - Strt: Reset second after press the button and show actual time
