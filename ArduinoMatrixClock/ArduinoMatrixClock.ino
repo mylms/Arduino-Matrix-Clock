@@ -12,14 +12,14 @@ https://www.mylms.cz/text-arduino-hodiny-s-maticovym-displejem/
 https://github.com/mylms/Arduino-Matrix-Clock
 
 D2 - BTN 1 (set internal_pullup)
-D3 � BTN 2 (set internal_pullup)
-D4 � matrix display, pin DIN
-D5 � matrix display, pin CLK
-D6 � matrix display, pin CS
-A4 � RTC module, pin SDA
-A5 � RTC module, pin SCL
-GND � common for all modules
-5V � common for all modules, 5V supply connected via 1N4148
+D3 – BTN 2 (set internal_pullup)
+D4 – matrix display, pin DIN
+D5 – matrix display, pin CLK
+D6 – matrix display, pin CS
+A4 – RTC module, pin SDA
+A5 – RTC module, pin SCL
+GND – common for all modules
+5V – common for all modules, 5V supply connected via 1N4148
 
 
 NOTE I: Daylight saving currently is not used (maybe in future).
@@ -40,7 +40,7 @@ Strt = start (second are set to 0 after press the button)
 
 SERIAL COMMUNICATION (9600b)
 You have to send three chars. 1st is function, other two are digits
-XDD -> X = function; DD = number 00 to 99 (two digits are nessesary)
+XNN -> X = function; NN = number 00 to 99 (two digits are nessesary)
 Command is case sensitive!! M01 and m01 are different commands.
 
 y = year (0 - 99)
@@ -52,6 +52,7 @@ H = hour (0 - 23)
 M = minute (0 - 59)
 S = second (0 - 59)
 
+D - show date (how many second per minute is shown date 00 = no, 60 = always)
 T = turn font 1
 t = turn font 2
 b = brightness (0 - 15)
@@ -108,7 +109,7 @@ const uint64_t symbols[] = {
 	0x0063954525956300,	//daylight saving
 	0x1f303e3333330000,	//y
 	0x00636b7f7f330000,	//m
-	0x0002020600000600,	//reserve
+	0x001f36666666361f,	//D
 	0x0002020600000e00,	//reserve
 	0x003e676f7b73633e,	//font 1 - 0
 	0x007e181818181c18,
@@ -173,10 +174,12 @@ byte daylightSaving = 0;	//daylight saving is enable from 31.3. to 27.10.
 byte timeMode1224 = 1;	//12/24 hour mode 12 = 0, 24 = 1
 byte turnFont1 = 0;	//font turning verticaly (one char)
 byte turnFont2 = 0;	//font turning verticaly (all display)
+byte showDate = 0;	//how many secon in one minute cycle is shown date
 
 bool showDots;	//dots are shown
 bool pmDotEnable = false;	//pm dot is shown
 bool dayightTimeEnable = false;	//is daylight time
+bool showDateNow = false;	//now date is shown instead of time
 
 void setup() {
 	//COMMUNICATION
@@ -228,6 +231,12 @@ void setup() {
 	if (timeMode1224 < 0 || timeMode1224 > 1) {
 		//in case variable out of range
 		timeMode1224 = 1;
+	}
+
+	showDate = EEPROM.read(7);	//load date time
+	if (showDate < 0 || showDate > 60) {
+		//in case variable out of range
+		showDate = 0;
 	}
 
 	delay(10);	//just delay...I thing I have had add it for correct function of display
@@ -494,10 +503,10 @@ void loop() {
 
 				//NEXT
 				systemState++;
-				DrawSymbol(3, 3);	//F
+				DrawSymbol(3, 18);	//date
 				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (font / 10) + (font * 10) + fontOffset - 10);	//actual font
-				DrawSymbol(0, (font % 10) + (font * 10) + fontOffset - 10);	//actual font
+				DrawSymbol(1, (showDate / 10) + fontOffset);	//actual show date time
+				DrawSymbol(0, (showDate % 10) + fontOffset);	//actual show date time
 			}
 		}
 
@@ -523,6 +532,43 @@ void loop() {
 
 	case 8:
 		//menu 8
+		//show show DATE
+		if (presentInput1 != lastInput1) {
+			//change detected BTN1
+			if (presentInput1) {
+				//rising edge detected
+
+				//NEXT
+				systemState++;
+				DrawSymbol(3, 3);	//F
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (font / 10) + (font * 10) + fontOffset - 10);	//actual font
+				DrawSymbol(0, (font % 10) + (font * 10) + fontOffset - 10);	//actual font
+			}
+		}
+
+		if (presentInput2 != lastInput2) {
+			//change detected BTN2
+			if (presentInput2) {
+				//rising edge detected
+				//set show date
+				showDate++;
+				if (showDate > 60) {
+					showDate = 0;
+				}
+
+				DrawSymbol(3, 18);	//date
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (showDate / 10) + fontOffset);	//actual show date time
+				DrawSymbol(0, (showDate % 10) + fontOffset);	//actual show date time
+
+				delay(25);
+			}
+		}
+		break;
+
+	case 9:
+		//menu 9
 		//set FONT
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
@@ -558,8 +604,8 @@ void loop() {
 		}
 		break;
 
-	case 9:
-		//menu 9
+	case 10:
+		//menu 10
 		//set DOT STYLE
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
@@ -595,8 +641,8 @@ void loop() {
 		}
 		break;
 
-	case 10:
-		//menu 10
+	case 11:
+		//menu 11
 		//set BRIGHTNES
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
@@ -636,8 +682,8 @@ void loop() {
 		}
 		break;
 
-	case 11:
-		//menu 11
+	case 12:
+		//menu 12
 		//set TURN FONT 1
 		//Rotate each symbol separately (vertical)
 		if (presentInput1 != lastInput1) {
@@ -674,8 +720,8 @@ void loop() {
 		}
 		break;
 
-	case 12:
-		//menu 12
+	case 13:
+		//menu 13
 		//set TURN FONT 2
 		//Rotate all display (verticaly)
 		if (presentInput1 != lastInput1) {
@@ -712,8 +758,8 @@ void loop() {
 		}
 		break;
 
-	case 13:
-		//menu 13
+	case 14:
+		//menu 14
 		//EXIT
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
@@ -730,6 +776,7 @@ void loop() {
 				EEPROM.write(4, turnFont1);	//store turn font1 to addr 4
 				EEPROM.write(5, turnFont2);	//store turn font2 to addr 5
 				EEPROM.write(6, timeMode1224);	//store 12/24 mode to addr 6
+				EEPROM.write(7, showDate);	//store date time to eeprom
 
 				systemState = 0;	//show actual time
 			}
@@ -749,6 +796,15 @@ void WriteTime() {
 	if (systemState > 0) {
 		//reserve font in menu
 		font = 1;
+	}
+
+	if (showDate > (60 - second)) {
+		//show date
+		showDateNow = true;
+	}
+	else {
+		//show time
+		showDateNow = false;
 	}
 
 	//write time to matrix display
@@ -783,17 +839,28 @@ void WriteTime() {
 			pmDotEnable = false;
 		}
 
-		DrawSymbol(2, (hour % 10) + (font * 10) + fontOffset - 10);
-		DrawSymbol(3, (hour / 10) + (font * 10) + fontOffset - 10);
+		if (showDateNow) {
+			//day
+			DrawSymbol(2, (dayOfMonth % 10) + (font * 10) + fontOffset - 10);
+			DrawSymbol(3, (dayOfMonth / 10) + (font * 10) + fontOffset - 10);
+
+			//month
+			DrawSymbol(0, (month % 10) + (font * 10) + fontOffset - 10);
+			DrawSymbol(1, (month / 10) + (font * 10) + fontOffset - 10);
+		}
+		else {
+			DrawSymbol(2, (hour % 10) + (font * 10) + fontOffset - 10);
+			DrawSymbol(3, (hour / 10) + (font * 10) + fontOffset - 10);
+		}
 	}
 
-	if (systemState == 0 || systemState == 3) {
+	if ((systemState == 0 && !showDateNow) || systemState == 3) {
 		//show minutes in normal state and "set minutes" state
 		DrawSymbol(0, (minute % 10) + (font * 10) + fontOffset - 10);
 		DrawSymbol(1, (minute / 10) + (font * 10) + fontOffset - 10);
 	}
 
-	if (systemState == 0) {
+	if (systemState == 0 && !showDateNow) {
 		//TIME
 		switch (dotStyle) {
 		case 0:
@@ -852,6 +919,11 @@ void DrawSymbol(byte adr, byte symbol) {
 			if (i == 2) lc.setLed(2, 2, 7, showDots);
 			if (i == 5) lc.setLed(2, 5, 7, showDots);
 			if (i == 6) lc.setLed(2, 6, 7, showDots);
+		}
+		
+		if (adr == 2 && systemState == 0 && showDateNow) {
+			if (i == 5) lc.setLed(2, 5, 7, true);
+			if (i == 6) lc.setLed(2, 6, 7, true);
 		}
 
 		if (adr == 0) {
@@ -955,7 +1027,7 @@ void SerialComm() {
 				receivedData = 1;
 			}
 			timeMode1224 = receivedData;
-			lc.setLed(2, 7, 6, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			EEPROM.write(6, timeMode1224);	//store 12/24 mode to addr 6
 			break;
 		case 58:
@@ -964,8 +1036,17 @@ void SerialComm() {
 				receivedData = 2;
 			}
 			dotStyle = receivedData;
-			lc.setLed(2, 7, 3, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			EEPROM.write(2, dotStyle);	//store actual font to addr 2
+			break;
+		case 68:
+			//show date 68 = D
+			if (receivedData > 60) {
+				receivedData = 0;
+			}
+			showDate = receivedData;
+			lc.setLed(3, 7, 0, true);	//show setting dot
+			EEPROM.write(7, showDate);	//store actual font to addr 2
 			break;
 		case 72:
 			//hour 72 = H
@@ -974,7 +1055,7 @@ void SerialComm() {
 			}
 			hour = receivedData;
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
-			lc.setLed(3, 7, 3, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			break;
 		case 77:
 			//minute 77 = M
@@ -983,7 +1064,7 @@ void SerialComm() {
 			}
 			minute = receivedData;
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
-			lc.setLed(3, 7, 4, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			break;
 		case 83:
 			//second 83 = S
@@ -992,7 +1073,7 @@ void SerialComm() {
 			}
 			second = receivedData;
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
-			lc.setLed(2, 7, 0, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			break;
 		case 84:
 			//turn 1 84 = T
@@ -1000,7 +1081,7 @@ void SerialComm() {
 				receivedData = 0;
 			}
 			turnFont1 = receivedData;
-			lc.setLed(2, 7, 4, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			EEPROM.write(4, turnFont1);	//store turn font1 to addr 4
 			break;
 		case 98:
@@ -1014,7 +1095,7 @@ void SerialComm() {
 				lc.setIntensity(address, bright);	//set light intensity 0 - min, 15 - max
 			}
 
-			lc.setLed(2, 7, 1, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			EEPROM.write(0, bright);	//store actual light intensity to addr 0
 			break;
 		case 100:
@@ -1024,7 +1105,7 @@ void SerialComm() {
 			}
 			dayOfMonth = receivedData;
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
-			lc.setLed(3, 7, 2, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			break;
 		case 102:
 			//font 102 = f
@@ -1036,7 +1117,7 @@ void SerialComm() {
 				receivedData = 1;
 			}
 			font = receivedData;
-			lc.setLed(2, 7, 2, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			EEPROM.write(1, font);	//store actual font to addr 1
 			break;
 		case 109:
@@ -1046,7 +1127,7 @@ void SerialComm() {
 			}
 			month = receivedData;
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
-			lc.setLed(3, 7, 1, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			break;
 		case 116:
 			//turn 2 116 = t
@@ -1054,7 +1135,7 @@ void SerialComm() {
 				receivedData = 0;
 			}
 			turnFont2 = receivedData;
-			lc.setLed(2, 7, 5, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			EEPROM.write(5, turnFont2);	//store turn font2 to addr 5
 			break;
 		case 119:
@@ -1064,7 +1145,7 @@ void SerialComm() {
 			}
 			dayOfWeek = receivedData;
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
-			lc.setLed(3, 7, 6, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//show setting dot
 			break;
 		case 121:
 			//year 121 = y
