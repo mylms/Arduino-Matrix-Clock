@@ -1,8 +1,11 @@
 # Arduino-Matrix-Clock v1.2
 
 Simple Arduino Clock with LED matrix display 32 x 8 pix. In this sketch is LedControl library (https://github.com/wayoda/LedControl) used.
+
 In v1.2 are add new features and deleted "graphic fonts".
-In v1.2 is easier set the clock via computer.
+
+In v1.2 is easier set the clock via computer (see code).
+
 
 Menu:
 - H: Hours
@@ -24,27 +27,6 @@ Menu:
 - DS3231 module
 - 4x LED matrix with MAX7219 driver (used LedControl library)
 - 2x button
-
-SERIAL COMMUNICATION (9600b)
-You have to send three chars. 1st is function, other two are digits
-XDD -> X = function; DD = number 00 to 99 (two digits are nessesary)
-Command is case sensitive!! M01 and m01 are different commands.
-
-y = year (0 - 99)
-m = month (1 - 12)
-d = day (1 - 31)
-w = day of week (1 - 7)
-
-H = hour (0 - 23)
-M = minute (0 - 59)
-S = second (0 - 59)
-
-T = turn font 1
-t = turn font 2
-b = brightness (0 - 15)
-f = font (1 - 5)
-/ = 12/24 hour format (/00 = 12h; /01 = 24h)
-: = dot style (:00 = not shown; :01 = always shining; :02 = blinking)
 
 
 For use external power supply (no USB) you need
