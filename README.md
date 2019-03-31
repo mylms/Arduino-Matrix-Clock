@@ -23,13 +23,14 @@ Menu:
 - T2: Font turning 2 (turn all diplay) (new)
 - Strt: Reset second after press the button and show actual time
 
+You need:
 - Arduino Nano
 - DS3231 module
 - 4x LED matrix with MAX7219 driver (used LedControl library)
 - 2x button
 
 
-For use external power supply (no USB) you need
+For use external power supply (no USB) you need:
 - 1N4148 diode
 - 5V power supply
 
