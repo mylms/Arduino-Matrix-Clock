@@ -34,6 +34,24 @@ AM/PM = time format 12/24 h,
 F = font, : = dots, B = brightness, RI = rotate font 1, RII = rotate font 2, U = rotate font upside down
 Strt = start (second are set to 0 after press the button)
 
+How the clock show time (t), date (D) and temerature (T)
+There are few examples
+
+Show only time (t) (all 60 seconds). Temperature and date are set to 0
+0tttttttttt tttttttttt tttttttttt tttttttttt tttttttttt tttttttttt60 second
+
+Date (D) is set to 40 second
+0tttttttttt tttttttttt tttttttttt tttttttttt DDDDDDDDDD DDDDDDDDDD60 second
+
+Date (D) is set to 30, temperature (T) is set to 40
+0tttttttttt tttttttttt tttttttttt DDDDDDDDDD TTTTTTTTTT TTTTTTTTTT60 second
+
+Date (D) and temperature (T) are set to 40. Date has priority. Temperature will not show
+0tttttttttt tttttttttt tttttttttt tttttttttt DDDDDDDDDD DDDDDDDDDD60 second
+
+Date (D) and temperature (T) is set to 60. Date has priority. Temperature will not show
+0DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD60 second
+
 
 SERIAL COMMUNICATION (9600b)
 You have to send three chars. 1st is function, other two are digits
@@ -49,8 +67,8 @@ H = hour (0 - 23)
 M = minute (0 - 59)
 S = second (0 - 59)
 
-D = show date (how many second per minute is date shown 00 = no, 60 = always; date is shown last xx second)
-t = show time (how many second per minute is temperature shown 00 = no, 60 = always; temperature is shown last xx second)
+D = show date (what second is date shown; 00 = newer, 60 = always)
+t = show time (what second is temperature shown 00 = newer, 60 = always)
 R = rotate font 1
 r = rotate font 2
 U = rotate font UpsideDown
@@ -905,14 +923,15 @@ void WriteTime() {
 		showMode = 0;
 	}
 
-	if (second == showDate && showDate > 0) {
-		//showdate is now & showdate is enabled 
-		showMode = 1;
-	}
-
 	if (second == showTemperature && showTemperature > 0) {
 		//showtemp is now & showtemp is enabled 
 		showMode = 2;
+	}
+
+	if (second == showDate && showDate > 0) {
+		//showdate is now & showdate is enabled 
+		//date has priority
+		showMode = 1;
 	}
 
 	if (showTemperature == 60) {
