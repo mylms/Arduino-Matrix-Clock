@@ -8,7 +8,6 @@ Author:		Petan (www.mylms.cz)
 
 /*
 https://www.mylms.cz/text-arduino-hodiny-s-maticovym-displejem/
-
 https://github.com/mylms/Arduino-Matrix-Clock
 
 D2 - BTN 1 (set internal_pullup)
