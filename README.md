@@ -19,8 +19,8 @@ Menu:
 - b: Backlight intensity
 - D: Show date (how many second in one minute is date shown - last xx second)
 - t: Show temperature (how many second in one minute is temperature shown - last xx second)
-- T1: Font turning 1 (turn each character)
-- T2: Font turning 2 (turn all diplay)
+- R: Font turning 1 (turn each character)
+- r: Font turning 2 (turn all diplay)
 - U: Turn font UpsideDown (new)
 - Strt: Reset second after press the button and show actual time
 
