@@ -1,8 +1,8 @@
 /*
 Name:		ArduinoMatrixClock.ino
 Created:	16.01.2018 20:56:49
-Last rev.:	31.03.2019
-Version:	1.2
+Last rev.:	21.04.2019
+Version:	1.3
 Author:		Petan (www.mylms.cz)
 */
 
@@ -22,28 +22,26 @@ GND – common for all modules
 5V – common for all modules, 5V supply connected via 1N4148
 
 
-NOTE I: Daylight saving currently is not used (maybe in future).
-NOTE II: Calendar (year, month, day, ...) currently are not used. You can just set it.
-
 ISSUES:
 If clock shows 45 hours, check your RTC module (check address, change battery, check wires, or at last try to change RTC module).
 
+
 HOW TO USE
 Press both buttons at the same time, then release. Now, you are in menu mode.
-By pressing BTN1 you change menu item, By pressing BTN2 change value of item.
+By pressing BTN1 you change menu item, By pressing BTN2 change value of selected item.
 H = hour, M = minute,
 y = year, m = month, d = day,
-AM/PM = time format, 
-F = font, : = dots, B = brightness, TI = turn font 1, TII = turn font 2
+AM/PM = time format 12/24 h, 
+F = font, : = dots, B = brightness, RI = rotate font 1, RII = rotate font 2, U = rotate font upside down
 Strt = start (second are set to 0 after press the button)
 
 
 SERIAL COMMUNICATION (9600b)
 You have to send three chars. 1st is function, other two are digits
 XNN -> X = function; NN = number 00 to 99 (two digits are nessesary)
-Command is case sensitive!! M01 and m01 are different commands.
+Command is case sensitive!! R01 and r01 are different commands!
 
-y = year (0 - 99)
+y = year (00 - 99)
 m = month (1 - 12)
 d = day (1 - 31)
 w = day of week (1 - 7)
@@ -52,13 +50,15 @@ H = hour (0 - 23)
 M = minute (0 - 59)
 S = second (0 - 59)
 
-D - show date (how many second per minute is shown date 00 = no, 60 = always)
-T = turn font 1
-t = turn font 2
+D = show date (how many second per minute is date shown 00 = no, 60 = always; date is shown last xx second)
+t = show time (how many second per minute is temperature shown 00 = no, 60 = always; temperature is shown last xx second)
+R = rotate font 1
+r = rotate font 2
+U = rotate font UpsideDown
 b = brightness (0 - 15)
 f = font (1 - 5)
 / = 12/24 hour format (/00 = 12h; /01 = 24h)
-: = dot style (:00 = not shown; :01 = always shining; :02 = blinking)
+: = dot style (:00 = not shown; :01 = always lit; :02 = blinking)
 
 */
 
@@ -66,17 +66,30 @@ f = font (1 - 5)
 #include <Wire.h>
 #include <LedControl.h>
 
+//OTHERS
+const byte versionMajor = 1;
+const byte versionMinor = 3;
+
+//you can change this value to change shown temperature - it's only temperature offset
+//Example: Real temperature is 23°C. Clock shows 26°C. Difference is -3°C. You have to change value to 100 - 3 = 97
+const byte temperatureOffset = 97;	//99 = -1, 100 = 0, 101 = 1
+
+
 //MATRIX DISPLAY
 byte devices = 4;	//count of displays
 LedControl lc = LedControl(4, 5, 6, devices);	//DIN, CLK, CS, count of displays
 
 //RTC DS3231
+//How to read time from RTC without library, see https://www.mylms.cz/text-kusy-kodu-k-arduinu/#ds3231
 #define DS3231_I2C_ADDRESS 0x68 //address of DS3231 module
-byte second, minute, hour, dayOfWeek, dayOfMonth, month, year; //global variables
+byte second, minute, hour, dayOfWeek, dayOfMonth, month, year; //global variables for time
+byte currentTemperatureH = 0;	//temperature in degC
+byte currentTemperatureL = 0;	//255 = 0.75, 128 = 0.5, 64 = 0,25, other = 0.0
 
 //TIMMING
 unsigned long presentTime;
 unsigned long displayTime;	//drawing
+unsigned long temperatureTime;	//gat temp
 
 //IO
 #define BTN1 2
@@ -87,31 +100,34 @@ bool presentInput1; //actual state of input #1
 bool presentInput2; //actual state of input #2
 
 //SYSTEM STATE
-byte systemState;
+byte systemState;	//0 = show time/date/temp, other = menu
+byte showMode = 0;	//0 = time, 1 = date, 2 = temperature
+bool showDots;	//dots are shown
+bool pmDotEnable = false;	//pm dot is shown
 
 //chars
 const uint64_t symbols[] = {
 	0x0000000000000000,	//space
-	0x0018180000181800,	//:
-	0x003b66663e060607,	//b
-	0x000f06060f06361c,	//f
-	0x006666667e666666,	//H
-	0x007f66460606060f,	//L
-	0x0063636b7f7f7763,	//M
-	0x003c66701c0e663c,	//S
-	0x00182c0c0c3e0c08,	//t
-	0x000f06666e3b0000,	//r
-	0x006e33333e303038,	//d (10)
-	0x005e4c4c0c0c2d3f,	//T1
-	0x00beacac0c0c2d3f,	//T2
-	0x01f204c813204180,	//12/24
-	0x000c1e3333330000,	//v
-	0x0063954525956300,	//daylight saving
-	0x1f303e3333330000,	//y
-	0x00636b7f7f330000,	//m
-	0x001f36666666361f,	//D
-	0x0002020600000e00,	//reserve
-	0x003e676f7b73633e,	//font 1 - 0
+	0x0018180000181800,	//: - dots (in menu)
+	0x003b66663e060607,	//b - backlight
+	0x000f06060f06361c,	//f - font
+	0x006666667e666666,	//H - hour
+	0x007f66460606060f,	//L - "LMS"
+	0x0063636b7f7f7763,	//M - minute
+	0x003c66701c0e663c,	//S - "Strt"
+	0x00182c0c0c3e0c08,	//t - temperature
+	0x000f06666e3b0000,	//r - Rotate II, "Strt"
+	0x006e33333e303038,	//d (10) - day
+	0x006766363e66663f,	//R - Rotate I
+	0x003c66030303663c,	//C - celsius
+	0x01f204c813204180,	//12/24 - "/" - time mode
+	0x000c1e3333330000,	//v - version
+	0x003e776363636363,	//U - upside down
+	0x1f303e3333330000,	//y - year
+	0x00636b7f7f330000,	//m - month
+	0x001f36666666361f,	//D - show date
+	0x000f06161e16467f,	//F - reserve...maybe for Fahrenheit
+	0x003e676f7b73633e,	//font #1 - 0
 	0x007e181818181c18,
 	0x007e660c3860663c,
 	0x003c66603860663c,
@@ -121,7 +137,7 @@ const uint64_t symbols[] = {
 	0x001818183060667e,
 	0x003c66663c66663c,
 	0x001c30607c66663c,
-	0x003c66666e76663c,	//font 2 - 0
+	0x003c66666e76663c,	//font #2 - 0
 	0x007e1818181c1818,
 	0x007e060c3060663c,
 	0x003c66603860663c,
@@ -131,7 +147,7 @@ const uint64_t symbols[] = {
 	0x001818183030667e,
 	0x003c66663c66663c,
 	0x003c66607c66663c,
-	0x1c2222222222221c,	//font 3 - 0
+	0x1c2222222222221c,	//font #3 - 0
 	0x1c08080808080c08,
 	0x3e0408102020221c,
 	0x1c2220201820221c,
@@ -141,7 +157,7 @@ const uint64_t symbols[] = {
 	0x040404081020203e,
 	0x1c2222221c22221c,
 	0x1c22203c2222221c,
-	0x001c22262a32221c,	//font 4 - 0
+	0x001c22262a32221c,	//font #4 - 0
 	0x003e080808080c08,
 	0x003e04081020221c,
 	0x001c22201008103e,
@@ -151,7 +167,7 @@ const uint64_t symbols[] = {
 	0x000404040810203e,
 	0x001c22221c22221c,
 	0x000c10203c22221c,
-	0x003c24242424243c,	//font 5 - 0
+	0x003c24242424243c,	//font #5 - 0
 	0x0020202020202020,
 	0x003c04043c20203c,
 	0x003c20203c20203c,
@@ -164,27 +180,24 @@ const uint64_t symbols[] = {
 };
 
 byte symbolsLenght = sizeof(symbols) / 80;	//count numbers of symbols
-byte fontOffset = 20;	//count of symbols before 1st number (10, 20, 30, ...)
+byte fontOffset = 20;	//count of symbols before 1st number (only 10, 20, 30, ...)
 
 //default values...but they are load from EEPROM
 byte bright = 7;
 byte font = 1;	//do not set less than 1. symbols 0-19 are used for letters etc.
 byte dotStyle = 2;	//0 - off, 1 - on, 2 - blinking
-byte daylightSaving = 0;	//daylight saving is enable from 31.3. to 27.10.
 byte timeMode1224 = 1;	//12/24 hour mode 12 = 0, 24 = 1
-byte turnFont1 = 0;	//font turning verticaly (one char)
-byte turnFont2 = 0;	//font turning verticaly (all display)
-byte showDate = 0;	//how many secon in one minute cycle is shown date
+byte rotateFont1 = 0;	//font rotateing verticaly (one char)
+byte rotateFont2 = 0;	//font rotateing verticaly (all display)
+byte showDate = 0;	//how many second in one minute cycle is date shown
+byte showTemperature = 0;	//how many second in one minute cycle is temperature shown
+byte upsideDown = 0;	//us font Upside down
 
-bool showDots;	//dots are shown
-bool pmDotEnable = false;	//pm dot is shown
-bool dayightTimeEnable = false;	//is daylight time
-bool showDateNow = false;	//now date is shown instead of time
 
 void setup() {
 	//COMMUNICATION
 	Wire.begin(); //start I2C communication
-	Serial.begin(9600);	//just for receive settings from PC
+	Serial.begin(9600);	//for communication with PC
 
 	//IO
 	//there is internal pull-up used - read variables are negated
@@ -209,22 +222,22 @@ void setup() {
 		dotStyle = 2;
 	}
 
-	daylightSaving = EEPROM.read(3);	//load daylight saving from EEPROM
-	if (daylightSaving < 0 || daylightSaving > 1) {
+	showTemperature = EEPROM.read(3);	//load temperature time EEPROM
+	if (showTemperature < 0 || showTemperature > 60) {
 		//in case variable out of range
-		daylightSaving = 1;
+		showTemperature = 0;
 	}
 
-	turnFont1 = EEPROM.read(4);	//load turn font 1 from EEPROM
-	if (turnFont1 < 0 || turnFont1 > 1) {
+	rotateFont1 = EEPROM.read(4);	//load rotate font 1 from EEPROM
+	if (rotateFont1 < 0 || rotateFont1 > 1) {
 		//in case variable out of range
-		turnFont1 = 0;
+		rotateFont1 = 0;
 	}
 
-	turnFont2 = EEPROM.read(5);	//load turn font 2 from EEPROM
-	if (turnFont2 < 0 || turnFont2 > 1) {
+	rotateFont2 = EEPROM.read(5);	//load rotate font 2 from EEPROM
+	if (rotateFont2 < 0 || rotateFont2 > 1) {
 		//in case variable out of range
-		turnFont2 = 0;
+		rotateFont2 = 0;
 	}
 
 	timeMode1224 = EEPROM.read(6);	//load 12/24 hour mode from EEPROM
@@ -239,7 +252,13 @@ void setup() {
 		showDate = 0;
 	}
 
-	delay(10);	//just delay...I thing I have had add it for correct function of display
+	upsideDown = EEPROM.read(8);	//load upsideDown state from EEPROM
+	if (upsideDown < 0 || upsideDown > 1) {
+		//in case variable out of range
+		upsideDown = 0;
+	}
+
+	delay(10);	//just small delay...I thing I have had add it for correct function of display
 
 	//SET ALL DISPLAYS
 	for (byte address = 0; address<devices; address++) {
@@ -256,6 +275,9 @@ void setup() {
 	*/
 
 	Intro();	//show LMS and version
+	Serial.println("Send '?' for help");
+
+	GetTemperature();	//just for start
 }
 
 void loop() {
@@ -268,13 +290,18 @@ void loop() {
 		//SHOW ACTUAL TIME
 		presentTime = millis();
 
+		//30 second timer
+		if (presentTime - temperatureTime >= 30000) {
+			temperatureTime = presentTime;
+			GetTemperature();
+		}
+
 		//0.5 second trigger
-		//do not afraid millis rollover
 		if (presentTime - displayTime >= 500) {
 			displayTime = presentTime;
 
 			GetRtc();		//get actual time
-			WriteTime();	//write actual time to matrix display
+			WriteTime();	//write actual time (etc) to matrix display
 		}
 
 		if (!presentInput1 && !presentInput2) {
@@ -382,8 +409,8 @@ void loop() {
 				//rising edge detected
 				//add year
 				year++;
-				if (year > 99) {
-					year = 0;
+				if (year > 50) {
+					year = 19;
 				}
 
 				DrawSymbol(3, 16);	//y
@@ -445,8 +472,8 @@ void loop() {
 				systemState++;
 				DrawSymbol(3, 13);	//12/24
 				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (timeMode1224 / 10) + fontOffset);	//actual turn font 2
-				DrawSymbol(0, (timeMode1224 % 10) + fontOffset);	//actual turn font 2
+				DrawSymbol(1, (timeMode1224 / 10) + fontOffset);	//actual time mode
+				DrawSymbol(0, (timeMode1224 % 10) + fontOffset);	//actual time mode
 			}
 		}
 
@@ -522,8 +549,8 @@ void loop() {
 
 				DrawSymbol(3, 13);	//12/24
 				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (timeMode1224 / 10) + fontOffset);	//actual turn font 2
-				DrawSymbol(0, (timeMode1224 % 10) + fontOffset);	//actual turn font 2
+				DrawSymbol(1, (timeMode1224 / 10) + fontOffset);	//actual time mode
+				DrawSymbol(0, (timeMode1224 % 10) + fontOffset);	//actual time mode
 
 				delay(25);
 			}
@@ -540,10 +567,10 @@ void loop() {
 
 				//NEXT
 				systemState++;
-				DrawSymbol(3, 3);	//F
+				DrawSymbol(3, 8);	//t - temperature
 				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (font / 10) + (font * 10) + fontOffset - 10);	//actual font
-				DrawSymbol(0, (font % 10) + (font * 10) + fontOffset - 10);	//actual font
+				DrawSymbol(1, (showTemperature / 10) + fontOffset);	//actual show temp time
+				DrawSymbol(0, (showTemperature % 10) + fontOffset);	//actual show temp time
 			}
 		}
 
@@ -569,6 +596,43 @@ void loop() {
 
 	case 9:
 		//menu 9
+		//show TEMPERATURE
+		if (presentInput1 != lastInput1) {
+			//change detected BTN1
+			if (presentInput1) {
+				//rising edge detected
+
+				//NEXT
+				systemState++;
+				DrawSymbol(3, 3);	//F
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (font / 10) + (font * 10) + fontOffset - 10);	//actual font
+				DrawSymbol(0, (font % 10) + (font * 10) + fontOffset - 10);	//actual font
+			}
+		}
+
+		if (presentInput2 != lastInput2) {
+			//change detected BTN2
+			if (presentInput2) {
+				//rising edge detected
+				//set show temperature
+				showTemperature++;
+				if (showTemperature > 60) {
+					showTemperature = 0;
+				}
+
+				DrawSymbol(3, 8);	//t - temperature
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (showTemperature / 10) + fontOffset);	//actual show temp time
+				DrawSymbol(0, (showTemperature % 10) + fontOffset);	//actual show temp time
+
+				delay(25);
+			}
+		}
+		break;
+
+	case 10:
+		//menu 10
 		//set FONT
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
@@ -604,8 +668,8 @@ void loop() {
 		}
 		break;
 
-	case 10:
-		//menu 10
+	case 11:
+		//menu 11
 		//set DOT STYLE
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
@@ -641,8 +705,8 @@ void loop() {
 		}
 		break;
 
-	case 11:
-		//menu 11
+	case 12:
+		//menu 12
 		//set BRIGHTNES
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
@@ -651,10 +715,10 @@ void loop() {
 
 				//NEXT
 				systemState++;
-				DrawSymbol(3, 11);	//T1
+				DrawSymbol(3, 11);	//R
 				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (turnFont1 / 10) + fontOffset);	//actual turn font 1
-				DrawSymbol(0, (turnFont1 % 10) + fontOffset);	//actual turn font 1
+				DrawSymbol(1, (rotateFont1 / 10) + fontOffset);	//actual rotate font 1
+				DrawSymbol(0, (rotateFont1 % 10) + fontOffset);	//actual rotate font 1
 			}
 		}
 
@@ -682,9 +746,9 @@ void loop() {
 		}
 		break;
 
-	case 12:
-		//menu 12
-		//set TURN FONT 1
+	case 13:
+		//menu 13
+		//set rotate FONT 1
 		//Rotate each symbol separately (vertical)
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
@@ -693,10 +757,10 @@ void loop() {
 
 				//NEXT
 				systemState++;
-				DrawSymbol(3, 12);	//T2
+				DrawSymbol(3, 9);	//r
 				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (turnFont2 / 10) + fontOffset);	//actual turn font 2
-				DrawSymbol(0, (turnFont2 % 10) + fontOffset);	//actual turn font 2
+				DrawSymbol(1, (rotateFont2 / 10) + fontOffset);	//actual rotate font 2
+				DrawSymbol(0, (rotateFont2 % 10) + fontOffset);	//actual rotate font 2
 			}
 		}
 
@@ -704,26 +768,64 @@ void loop() {
 			//change detected BTN2
 			if (presentInput2) {
 				//rising edge detected
-				//set font turning
-				turnFont1++;
-				if (turnFont1 > 1) {
-					turnFont1 = 0;
+				//set font rotateing
+				rotateFont1++;
+				if (rotateFont1 > 1) {
+					rotateFont1 = 0;
 				}
 
-				DrawSymbol(3, 11);	//T1
+				DrawSymbol(3, 11);	//R
 				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (turnFont1 / 10) + fontOffset);	//actual turn font 1
-				DrawSymbol(0, (turnFont1 % 10) + fontOffset);	//actual turn font 1
+				DrawSymbol(1, (rotateFont1 / 10) + fontOffset);	//actual rotate font 1
+				DrawSymbol(0, (rotateFont1 % 10) + fontOffset);	//actual rotate font 1
 
 				delay(25);
 			}
 		}
 		break;
 
-	case 13:
-		//menu 13
-		//set TURN FONT 2
+	case 14:
+		//menu 14
+		//set rotate FONT 2
 		//Rotate all display (verticaly)
+		if (presentInput1 != lastInput1) {
+			//change detected BTN1
+			if (presentInput1) {
+				//rising edge detected
+
+				//NEXT
+				systemState++;
+				DrawSymbol(3, 15);	//U
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (upsideDown / 10) + fontOffset);	//actual rotate font 2
+				DrawSymbol(0, (upsideDown % 10) + fontOffset);	//actual rotate font 2
+			}
+		}
+
+		if (presentInput2 != lastInput2) {
+			//change detected BTN2
+			if (presentInput2) {
+				//rising edge detected
+				//set font rotateing
+				rotateFont2++;
+				if (rotateFont2 > 1) {
+					rotateFont2 = 0;
+				}
+
+				DrawSymbol(3, 9);	//r
+				DrawSymbol(2, 0);	//space
+				DrawSymbol(1, (rotateFont2 / 10) + fontOffset);	//actual rotate font 2
+				DrawSymbol(0, (rotateFont2 % 10) + fontOffset);	//actual rotate font 2
+
+				delay(25);
+			}
+		}
+		break;
+
+	case 15:
+		//menu 15
+		//set rotate upsidedown
+		//Rotate all display (horizontaly)
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
 			if (presentInput1) {
@@ -742,24 +844,24 @@ void loop() {
 			//change detected BTN2
 			if (presentInput2) {
 				//rising edge detected
-				//set font turning
-				turnFont2++;
-				if (turnFont2 > 1) {
-					turnFont2 = 0;
+				//set font rotateing
+				upsideDown++;
+				if (upsideDown > 1) {
+					upsideDown = 0;
 				}
 
-				DrawSymbol(3, 12);	//T2
+				DrawSymbol(3, 15);	//U
 				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (turnFont2 / 10) + fontOffset);	//actual turn font 2
-				DrawSymbol(0, (turnFont2 % 10) + fontOffset);	//actual turn font 2
+				DrawSymbol(1, (upsideDown / 10) + fontOffset);	//actual rotate font 2
+				DrawSymbol(0, (upsideDown % 10) + fontOffset);	//actual rotate font 2
 
 				delay(25);
 			}
 		}
 		break;
 
-	case 14:
-		//menu 14
+	case 16:
+		//menu 16
 		//EXIT
 		if (presentInput1 != lastInput1) {
 			//change detected BTN1
@@ -772,11 +874,12 @@ void loop() {
 				EEPROM.write(0, bright);	//store actual light intensity to addr 0
 				EEPROM.write(1, font);	//store actual font to addr 1
 				EEPROM.write(2, dotStyle);	//store actual font to addr 2
-				EEPROM.write(3, daylightSaving);	//store daylight mode to addr 3
-				EEPROM.write(4, turnFont1);	//store turn font1 to addr 4
-				EEPROM.write(5, turnFont2);	//store turn font2 to addr 5
+				EEPROM.write(3, showTemperature);	//store temperature time to addr 3
+				EEPROM.write(4, rotateFont1);	//store rotate font1 to addr 4
+				EEPROM.write(5, rotateFont2);	//store rotate font2 to addr 5
 				EEPROM.write(6, timeMode1224);	//store 12/24 mode to addr 6
 				EEPROM.write(7, showDate);	//store date time to eeprom
+				EEPROM.write(8, upsideDown);	//store upsideDown rotate to EEPROM
 
 				systemState = 0;	//show actual time
 			}
@@ -794,90 +897,145 @@ void WriteTime() {
 	byte storedFont = font;	//store actual seting during MENU
 
 	if (systemState > 0) {
-		//reserve font in menu
+		//reserve font for menu
 		font = 1;
 	}
 
-	if (showDate > (60 - second)) {
-		//show date
-		showDateNow = true;
-	}
-	else {
-		//show time
-		showDateNow = false;
+	if (second == 0) {
+		//show time in 0 second
+		showMode = 0;
 	}
 
-	//write time to matrix display
+	if (second == showDate && showDate > 0) {
+		//showdate is now & showdate is enabled 
+		showMode = 1;
+	}
+
+	if (second == showTemperature && showTemperature > 0) {
+		//showtemp is now & showtemp is enabled 
+		showMode = 2;
+	}
+
+	if (showTemperature == 60) {
+		//salways howtemp
+		showMode = 2;
+	}
+
+	if (showDate == 60) {
+		//always show date
+		//date has priority
+		showMode = 1;
+	}
+
+	//write time to matrix display in menu
 	if (systemState == 2) {
 		//show hours in 24h format in menu (set hours)
 		DrawSymbol(2, (hour % 10) + (font * 10) + fontOffset - 10);
 		DrawSymbol(3, (hour / 10) + (font * 10) + fontOffset - 10);
+
+		showDots = false;	//hide dots (colon)
+		pmDotEnable = false;	//hide PM dot
 	}
 
-	if (systemState == 0) {
-		//show hours in normal state
-		if (timeMode1224 == 0) {
-			//12h format
-			if (hour >= 0 && hour <= 11) {
-				pmDotEnable = false;
-			}
-
-			if (hour == 12) {
-				pmDotEnable = true;
-			}
-
-			if (hour == 0) {
-				hour = 12;
-			}
-
-			if (hour > 12) {
-				hour -= 12;
-				pmDotEnable = true;
-			}
-		}
-		else {
-			pmDotEnable = false;
-		}
-
-		if (showDateNow) {
-			//day
-			DrawSymbol(2, (dayOfMonth % 10) + (font * 10) + fontOffset - 10);
-			DrawSymbol(3, (dayOfMonth / 10) + (font * 10) + fontOffset - 10);
-
-			//month
-			DrawSymbol(0, (month % 10) + (font * 10) + fontOffset - 10);
-			DrawSymbol(1, (month / 10) + (font * 10) + fontOffset - 10);
-		}
-		else {
-			DrawSymbol(2, (hour % 10) + (font * 10) + fontOffset - 10);
-			DrawSymbol(3, (hour / 10) + (font * 10) + fontOffset - 10);
-		}
-	}
-
-	if ((systemState == 0 && !showDateNow) || systemState == 3) {
-		//show minutes in normal state and "set minutes" state
+	//write time to matrix display in menu
+	if (systemState == 3) {
+		//show minute in menu
 		DrawSymbol(0, (minute % 10) + (font * 10) + fontOffset - 10);
 		DrawSymbol(1, (minute / 10) + (font * 10) + fontOffset - 10);
 	}
 
-	if (systemState == 0 && !showDateNow) {
-		//TIME
-		switch (dotStyle) {
+	if (systemState == 0) {
+		//show data in normal state
+		switch (showMode) {
 		case 0:
-			showDots = false;	//hide dots
+			//time
+			if (timeMode1224 == 0) {
+				//12h format
+				if (hour >= 0 && hour <= 11) {
+					pmDotEnable = false;
+				}
+
+				if (hour == 12) {
+					pmDotEnable = true;
+				}
+
+				if (hour == 0) {
+					hour = 12;
+				}
+
+				if (hour > 12) {
+					hour -= 12;
+					pmDotEnable = true;
+				}
+			}
+			else {
+				//24h format
+				pmDotEnable = false;
+			}
+
+			//show dots (colon)
+			if (systemState == 0) {
+				//TIME
+				switch (dotStyle) {
+				case 0:
+					showDots = false;	//hide dots
+					break;
+				case 1:
+					showDots = true;	//show dots
+					break;
+				case 2:
+					showDots = !showDots;	//blinking
+					break;
+				}
+			}
+
+			//hour
+			DrawSymbol(2, (hour % 10) + (font * 10) + fontOffset - 10);
+			DrawSymbol(3, (hour / 10) + (font * 10) + fontOffset - 10);
+
+			//minute
+			DrawSymbol(0, (minute % 10) + (font * 10) + fontOffset - 10);
+			DrawSymbol(1, (minute / 10) + (font * 10) + fontOffset - 10);
 			break;
 		case 1:
-			showDots = true;	//show dots
+			//date
+			//day (instead of hour)
+			DrawSymbol(2, (dayOfMonth % 10) + (font * 10) + fontOffset - 10);
+			DrawSymbol(3, (dayOfMonth / 10) + (font * 10) + fontOffset - 10);
+
+			//month (instead of minute)
+			DrawSymbol(0, (month % 10) + (font * 10) + fontOffset - 10);
+			DrawSymbol(1, (month / 10) + (font * 10) + fontOffset - 10);
+
+			showDots = false;	//hide dots (colon)
+			pmDotEnable = false;	//hide PM dot
 			break;
 		case 2:
-			showDots = !showDots;	//blinking
+			//temperature
+			DrawSymbol(2, (currentTemperatureH % 10) + (font * 10) + fontOffset - 10);
+			DrawSymbol(3, (currentTemperatureH / 10) + (font * 10) + fontOffset - 10);
+
+			switch (currentTemperatureL) {
+			case 255:
+				DrawSymbol(1, 8 + (font * 10) + fontOffset - 10);
+				break;
+			case 128:
+				DrawSymbol(1, 5 + (font * 10) + fontOffset - 10);
+				break;
+			case 64:
+				DrawSymbol(1, 3 + (font * 10) + fontOffset - 10);
+				break;
+			default:
+				DrawSymbol(1, 0 + (font * 10) + fontOffset - 10);
+				break;
+			}
+
+			DrawSymbol(0, 12);	//draw "C" symbol
+			showDots = false;	//hide dots (colon)
+			pmDotEnable = false;	//hide PM dot
 			break;
 		}
-	}
-	else{
-		//MENU
-		showDots = false;	//hide dots
-		pmDotEnable = false;	//hide PM Dot
+
 	}
 
 	font = storedFont;
@@ -893,9 +1051,9 @@ void Intro() {
 
 	//version of fw
 	DrawSymbol(3, 14);	//v
-	DrawSymbol(2, 21);	//1
+	DrawSymbol(2, versionMajor + fontOffset);	//1
 	DrawSymbol(1, 1);	//:
-	DrawSymbol(0, 22);	//2
+	DrawSymbol(0, versionMinor + fontOffset);	//3
 
 	delay(2000);
 }
@@ -903,39 +1061,50 @@ void Intro() {
 void DrawSymbol(byte adr, byte symbol) {
 	//draw symbol
 	//adr - used part of display
-	if (turnFont2 == 1) {
+	if (rotateFont2 == 1) {
 		adr = 3 - adr;
 	}
 
-	for (int i = 0; i < 8; i++) {
+	byte j = 0;	//variable for upsidedown font turning
+
+	for (byte i = 0; i < 8; i++) {
+		j = i;
+		if (upsideDown == 1) {
+			//turn font upside down
+			j = 7 - i;
+		}
+		
 		byte row = (symbols[symbol] >> i * 8) & 0xFF;	//just some magic
-		lc.setRow(adr, i, ByteRevers(row));
+		lc.setRow(adr, j, ByteRevers(row));
 
 		//blinking dots on display
 		//I have to draw "dots" during draw symbol. In other case it's blinking.
 		//Better variant would update symbol before draw - before FOR structure. Maybe in next version :)
 		if (adr == 2 && dotStyle > 0){
-			if (i == 1) lc.setLed(2, 1, 7, showDots);  //addr, row, column
-			if (i == 2) lc.setLed(2, 2, 7, showDots);
-			if (i == 5) lc.setLed(2, 5, 7, showDots);
-			if (i == 6) lc.setLed(2, 6, 7, showDots);
+			//colon
+			if (i == 1) lc.setLed(adr, 1, 7, showDots);  //addr, row, column
+			if (i == 2) lc.setLed(adr, 2, 7, showDots);
+			if (i == 5) lc.setLed(adr, 5, 7, showDots);
+			if (i == 6) lc.setLed(adr, 6, 7, showDots);
 		}
 		
-		if (adr == 2 && systemState == 0 && showDateNow) {
+		if (adr == 2 && systemState == 0 && (showMode == 1 || showMode == 2)) {
+			//date and temperature point
 			if (i == 5) lc.setLed(2, 5, 7, true);
 			if (i == 6) lc.setLed(2, 6, 7, true);
 		}
 
 		if (adr == 0) {
+			//PM point
 			lc.setLed(0, 7, 7, pmDotEnable);
 		}
 	}
 }
 
 byte ByteRevers(byte in) {
-	//font turning
-	if (turnFont1 == 1) {
-		//do not turn
+	//font rotateing
+	if (rotateFont1 == 1) {
+		//do not rotate
 		return(in);
 	}
 
@@ -983,6 +1152,24 @@ void GetRtc() {
 	year = bcdToDec(Wire.read());
 }
 
+void GetTemperature() {
+	Wire.beginTransmission(DS3231_I2C_ADDRESS);
+	Wire.write(0x11);
+	Wire.endTransmission();
+
+	Wire.requestFrom(DS3231_I2C_ADDRESS, 2);	//request - 2 bytes from RTC
+	if (Wire.available()) {
+		currentTemperatureH = Wire.read();	//temperature
+		currentTemperatureL = Wire.read();	//decimals
+
+		currentTemperatureH = currentTemperatureH + temperatureOffset - 100;
+	}
+	else {
+		currentTemperatureH = 99; //error value
+		currentTemperatureL = 0;
+	}
+}
+
 //conversion Dec to BCD 
 byte decToBcd(byte val) {
 	return((val / 10 * 16) + (val % 10));
@@ -994,30 +1181,30 @@ byte bcdToDec(byte val) {
 }
 
 //serial communication with PC
-//set time via PC
 void SerialComm() {
-	//first letter - type of data
-	//second and third letter - data
+	//first char - type of data
+	//second and third char - data
 	//there are used only "printable" characters
 
 	if (Serial.available() > 0) {
 		byte receivedCommand;
-		receivedCommand = Serial.read();	//read first letter
+		receivedCommand = Serial.read();	//read first char
 
-		delay(10);	//wait for other letters
+		delay(10);	//wait for other char
 
 		byte receivedDataTens;
 		receivedDataTens = Serial.read();
-		receivedDataTens -= 48;	// ASCII code for '0' is 48
+		receivedDataTens -= 48;	// ASCII code for "0" is 48
 
 		byte receivedDataOnes;
 		receivedDataOnes = Serial.read();
-		receivedDataOnes -= 48;	// ASCII code for '0' is 48
+		receivedDataOnes -= 48;	// ASCII code for "0" is 48
 
 		byte receivedData;
 		receivedData = (receivedDataTens * 10) + receivedDataOnes;
 		if (receivedData > 99) {
-			receivedData = 99;
+			//maximal value is 99
+			receivedData = 0;	//value is out of range
 		}
 
 		switch (receivedCommand) {
@@ -1028,7 +1215,7 @@ void SerialComm() {
 			}
 			timeMode1224 = receivedData;
 			lc.setLed(3, 7, 0, true);	//show setting dot
-			EEPROM.write(6, timeMode1224);	//store 12/24 mode to addr 6
+			EEPROM.write(6, timeMode1224);	//save
 			break;
 		case 58:
 			//dot style 58 = :
@@ -1037,7 +1224,7 @@ void SerialComm() {
 			}
 			dotStyle = receivedData;
 			lc.setLed(3, 7, 0, true);	//show setting dot
-			EEPROM.write(2, dotStyle);	//store actual font to addr 2
+			EEPROM.write(2, dotStyle);	//save
 			break;
 		case 68:
 			//show date 68 = D
@@ -1046,7 +1233,7 @@ void SerialComm() {
 			}
 			showDate = receivedData;
 			lc.setLed(3, 7, 0, true);	//show setting dot
-			EEPROM.write(7, showDate);	//store actual font to addr 2
+			EEPROM.write(7, showDate);	//save
 			break;
 		case 72:
 			//hour 72 = H
@@ -1075,14 +1262,23 @@ void SerialComm() {
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
 			lc.setLed(3, 7, 0, true);	//show setting dot
 			break;
-		case 84:
-			//turn 1 84 = T
+		case 82:
+			//Rotate font 1 82 = R
 			if (receivedData > 1) {
 				receivedData = 0;
 			}
-			turnFont1 = receivedData;
+			rotateFont1 = receivedData;
 			lc.setLed(3, 7, 0, true);	//show setting dot
-			EEPROM.write(4, turnFont1);	//store turn font1 to addr 4
+			EEPROM.write(4, rotateFont1);	//save
+			break;
+		case 85:
+			//UpsideDown 1 85 = U
+			if (receivedData > 1) {
+				receivedData = 0;
+			}
+			upsideDown = receivedData;
+			lc.setLed(3, 7, 0, true);	//show setting dot
+			EEPROM.write(8, upsideDown);	//save
 			break;
 		case 98:
 			//brightness 98 = b
@@ -1096,7 +1292,7 @@ void SerialComm() {
 			}
 
 			lc.setLed(3, 7, 0, true);	//show setting dot
-			EEPROM.write(0, bright);	//store actual light intensity to addr 0
+			EEPROM.write(0, bright);	//save
 			break;
 		case 100:
 			//dayOfMonth 100 = d
@@ -1105,7 +1301,7 @@ void SerialComm() {
 			}
 			dayOfMonth = receivedData;
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
-			lc.setLed(3, 7, 0, true);	//show setting dot
+			lc.setLed(3, 7, 0, true);	//save
 			break;
 		case 102:
 			//font 102 = f
@@ -1118,7 +1314,7 @@ void SerialComm() {
 			}
 			font = receivedData;
 			lc.setLed(3, 7, 0, true);	//show setting dot
-			EEPROM.write(1, font);	//store actual font to addr 1
+			EEPROM.write(1, font);	//save
 			break;
 		case 109:
 			//month 109 = m
@@ -1129,14 +1325,23 @@ void SerialComm() {
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
 			lc.setLed(3, 7, 0, true);	//show setting dot
 			break;
-		case 116:
-			//turn 2 116 = t
+		case 114:
+			//rotate 2 114 = r
 			if (receivedData > 1) {
 				receivedData = 0;
 			}
-			turnFont2 = receivedData;
+			rotateFont2 = receivedData;
 			lc.setLed(3, 7, 0, true);	//show setting dot
-			EEPROM.write(5, turnFont2);	//store turn font2 to addr 5
+			EEPROM.write(5, rotateFont2);	//save
+			break;
+		case 116:
+			//temperature time 116 = t
+			if (receivedData > 60) {
+				receivedData = 0;
+			}
+			showTemperature = receivedData;
+			lc.setLed(3, 7, 0, true);	//show setting dot
+			EEPROM.write(5, showTemperature);	//save
 			break;
 		case 119:
 			//dayofWeek 119 = w
@@ -1153,8 +1358,83 @@ void SerialComm() {
 			SetRtc(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
 			lc.setLed(3, 7, 0, true);	//show setting dot
 			break;
-		}
+		case 63:
+			//get data ? = 63
+			Serial.println("");
+			Serial.println("https://github.com/mylms/Arduino-Matrix-Clock");
+			Serial.print("v");
+			Serial.print(versionMajor);
+			Serial.print(".");
+			Serial.print(versionMinor);
+			Serial.println("");
+			Serial.println("");
+			Serial.println("Date (y/m/d): ");
+			Serial.println(year);
+			Serial.println(month);
+			Serial.println(dayOfMonth);
+			Serial.println(dayOfWeek);
 
+			Serial.println("");
+			Serial.println("Time (H/M/S): ");
+			Serial.println(hour);
+			Serial.println(minute);
+			Serial.println(second);
+
+			Serial.println("");
+			Serial.println("Temperature (read only): ");
+			Serial.print(currentTemperatureH);
+			switch (currentTemperatureL) {
+			case 255:
+				Serial.println(",75");
+				break;
+			case 128:
+				Serial.println(",5");
+				break;
+			case 64:
+				Serial.println(",25");
+				break;
+			default:
+				Serial.println(",0");
+				break;
+			}
+
+			Serial.println("");
+			Serial.println("Show date (D 00-60): ");
+			Serial.println(showDate);
+
+			Serial.println("");
+			Serial.println("Show temperature (t 00-60): ");
+			Serial.println(showTemperature);
+
+			Serial.println("");
+			Serial.println("Font rotate (R 00-01): ");
+			Serial.println(rotateFont1);
+
+			Serial.println("");
+			Serial.println("Display rotate (r 00-01): ");
+			Serial.println(rotateFont2);
+
+			Serial.println("");
+			Serial.println("UpsideDown rotate (U 00-01): ");
+			Serial.println(upsideDown);
+
+			Serial.println("");
+			Serial.println("Brightness (b 00-15): ");
+			Serial.println(bright);
+
+			Serial.println("");
+			Serial.println("Font (f 00-05): ");
+			Serial.println(font);
+
+			Serial.println("");
+			Serial.println("12/24h mode (/ 00-01): ");
+			Serial.println(timeMode1224);
+
+			Serial.println("");
+			Serial.println("Dot style (: 00-02): ");
+			Serial.println(dotStyle);
+			break;
+		}
 		//flush serial data
 		Serial.flush();
 	}

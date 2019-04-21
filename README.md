@@ -1,27 +1,27 @@
-# Arduino-Matrix-Clock v1.2
+# Arduino-Matrix-Clock v1.3
 
 Simple Arduino Clock with LED matrix display 32 x 8 pix. In this sketch is LedControl library (https://github.com/wayoda/LedControl) used.
 
-In v1.2 are add new features and deleted "graphic fonts".
-
-In v1.2 is easier set the clock via computer (see code).
+Version 1.3 can show temperature and it is posible to turn font UpsideDown.
 
 
 Menu:
 - H: Hours
 - M: Minutes
 
-- y: year (new)
-- m: month (new)
-- d: day (new)
+- y: year
+- m: month
+- d: day
 
-- /: 12/24h time format (00 = 12h time format, 01 = 24h time format) (new)
+- /: 12/24h time format (00 = 12h time format, 01 = 24h time format)
 - f: Font (show nr of font in select font style)
 - :: Dot style (0 - hide, 1 - show, 2 - blinking)
 - b: Backlight intensity
-- D: Show date (how many second in one minute is date shown - last xx second) (new)
-- T1: Font turning 1 (turn each character) (new)
-- T2: Font turning 2 (turn all diplay) (new)
+- D: Show date (how many second in one minute is date shown - last xx second)
+- t: Show temperature (how many second in one minute is temperature shown - last xx second)
+- R: Font turning 1 (turn each character)
+- r: Font turning 2 (turn all diplay)
+- U: Turn font UpsideDown (new)
 - Strt: Reset second after press the button and show actual time
 
 You need:
