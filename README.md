@@ -17,8 +17,8 @@ Menu:
 - f: Font (show nr of font in select font style)
 - :: Dot style (0 - hide, 1 - show, 2 - blinking)
 - b: Backlight intensity
-- D: Show date (how many second in one minute is date shown - last xx second)
-- t: Show temperature (how many second in one minute is temperature shown - last xx second)
+- D: Show date (what second is date shown; 00 = newer, 60 = always)
+- t: Show temperature (what second is temperature shown 00 = newer, 60 = always)
 - R: Font turning 1 (turn each character)
 - r: Font turning 2 (turn all diplay)
 - U: Turn font UpsideDown (new)
