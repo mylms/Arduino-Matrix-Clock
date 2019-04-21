@@ -1,4 +1,4 @@
-# Arduino-Matrix-Clock v1.3
+# Arduino-Matrix-Clock v1.2
 
 Simple Arduino Clock with LED matrix display 32 x 8 pix. In this sketch is LedControl library (https://github.com/wayoda/LedControl) used.
 
