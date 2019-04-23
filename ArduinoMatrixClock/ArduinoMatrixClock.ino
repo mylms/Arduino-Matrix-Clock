@@ -1359,7 +1359,7 @@ void SerialComm() {
 			}
 			showTemperature = receivedData;
 			lc.setLed(3, 7, 0, true);	//show setting dot
-			EEPROM.write(5, showTemperature);	//save
+			EEPROM.write(3, showTemperature);	//save
 			break;
 		case 119:
 			//dayofWeek 119 = w
