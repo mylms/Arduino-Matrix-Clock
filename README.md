@@ -14,14 +14,14 @@ Menu:
 - d: day
 
 - /: 12/24h time format (00 = 12h time format, 01 = 24h time format)
-- f: Font (show nr of font in select font style)
+- f: Font (show # of font in select font style 01 - 05)
 - :: Dot style (0 - hide, 1 - show, 2 - blinking)
-- b: Backlight intensity
+- b: Backlight intensity (00 - 15)
 - D: Show date (what second is date shown; 00 = newer, 60 = always)
 - t: Show temperature (what second is temperature shown 00 = newer, 60 = always)
-- R: Font turning 1 (turn each character)
-- r: Font turning 2 (turn all diplay)
-- U: Turn font UpsideDown (new)
+- R: Font turning 1 (turn each character; 00 = off, 01 = on)
+- r: Font turning 2 (turn all diplay; 00 = off, 01 = on)
+- U: Turn font UpsideDown (new; 00 = off, 01 = on)
 - Strt: Reset second after press the button and show actual time
 
 You need:
