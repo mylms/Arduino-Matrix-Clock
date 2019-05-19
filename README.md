@@ -35,12 +35,12 @@ For use external power supply (no USB) you need:
 - 1N4148 diode
 - 5V power supply
 
-![alt Arduino Matrix Clock](https://www.mylms.cz/obrazky/elektronika/arduino-matrix-clock-1.jpg)
+![alt Arduino Matrix Clock](https://www.mylms.cz/wp-content/uploads/2018/06/arduino-matrix-clock-1.jpg)
 
-![alt Arduino Matrix Clock - Schematics](https://www.mylms.cz/obrazky/elektronika/arduino-matrix-clock-9.png)
+![alt Arduino Matrix Clock - Schematics](https://www.mylms.cz/wp-content/uploads/2018/06/arduino-matrix-clock-9.png)
 
 
 
-More info in Czech language: https://www.mylms.cz/text-arduino-hodiny-s-maticovym-displejem/ You can use forum there.
+More info in Czech language: https://www.mylms.cz/arduino-hodiny-s-maticovym-displejem/ You can use forum there.
 
 See video: https://youtu.be/HDweqN9cDNA
