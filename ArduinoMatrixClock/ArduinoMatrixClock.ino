@@ -1,8 +1,8 @@
 /*
 Name:		ArduinoMatrixClock.ino
 Created:	16.01.2018 20:56:49
-Last rev.:	21.04.2019
-Version:	1.3
+Last rev.:	05.07.2019
+Version:	1.4
 Author:		Petan (www.mylms.cz)
 */
 
@@ -12,6 +12,8 @@ https://github.com/mylms/Arduino-Matrix-Clock
 
 D2 - BTN 1 (set internal_pullup)
 D3 – BTN 2 (set internal_pullup)
+D10 - INPUT1 (set internal_pullup)
+D11 - INPUT2 (set internal_pullup)
 D4 – matrix display, pin DIN
 D5 – matrix display, pin CLK
 D6 – matrix display, pin CS
@@ -31,27 +33,36 @@ By pressing BTN1 you change menu item, By pressing BTN2 change value of selected
 H = hour, M = minute,
 y = year, m = month, d = day,
 AM/PM = time format 12/24 h, 
-F = font, : = dots, B = brightness, RI = rotate font 1, RII = rotate font 2, U = rotate font upside down
+F = font, : = dots, B = brightness, RI = rotate font 1, RII = rotate font 2, U = rotate font upside down, v = vertical mode
 Strt = start (second are set to 0 after press the button)
 
-How the clock show time (t), date (D) and temerature (T)
+How the clock show time (T), date (D) and temerature (t)
 There are few examples
 
-Show only time (t) (all 60 seconds). Temperature and date are set to 0
-0tttttttttt tttttttttt tttttttttt tttttttttt tttttttttt tttttttttt60 second
+Show only time (T) (all 60 seconds). Temperature and date are set to 0
+0TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT60 second
 
 Date (D) is set to 40 second
-0tttttttttt tttttttttt tttttttttt tttttttttt DDDDDDDDDD DDDDDDDDDD60 second
+0TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT DDDDDDDDDD DDDDDDDDDD60 second
 
-Date (D) is set to 30, temperature (T) is set to 40
-0tttttttttt tttttttttt tttttttttt DDDDDDDDDD TTTTTTTTTT TTTTTTTTTT60 second
+Date (D) is set to 30, temperature (t) is set to 40
+0TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT DDDDDDDDDD tttttttttt tttttttttt60 second
 
-Date (D) and temperature (T) are set to 40. Date has priority. Temperature will not show
-0tttttttttt tttttttttt tttttttttt tttttttttt DDDDDDDDDD DDDDDDDDDD60 second
+Date (D) and temperature (t) are set to 40. Date has priority. Temperature (t) will not show
+0TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT DDDDDDDDDD DDDDDDDDDD60 second
 
-Date (D) and temperature (T) is set to 60. Date has priority. Temperature will not show
+Date (D) and temperature (t) is set to 60. Date has priority. Time (T) and temperature (t) will not show
 0DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD60 second
 
+SHOW MESSAGE
+In v1.4 you can show some message (only 4 chars). If you connect input 10 and/or 11 to GND you can show one of them.
+Text of message you can upgrade only in this code, see row around 400 (look for '//show some message or time').
+0 = input is not connect to GND; 1 = input is connect to GND
+IN10	|	IN11	|	OUT
+0		|	0		|	show time, date etc.
+0		|	1		|	message 1
+1		|	0		|	message 2
+1		|	1		|	message 3
 
 SERIAL COMMUNICATION (9600b)
 You have to send three chars. 1st is function, other two are digits
@@ -68,7 +79,7 @@ M = minute (0 - 59)
 S = second (0 - 59)
 
 D = show date (what second is date shown; 00 = newer, 60 = always)
-t = show time (what second is temperature shown 00 = newer, 60 = always)
+t = show temperature (what second is temperature shown 00 = newer, 60 = always)
 R = rotate font 1
 r = rotate font 2
 U = rotate font UpsideDown
@@ -76,6 +87,7 @@ b = brightness (0 - 15)
 f = font (1 - 5)
 / = 12/24 hour format (/00 = 12h; /01 = 24h)
 : = dot style (:00 = not shown; :01 = always lit; :02 = blinking)
+v = vertical mode (v00 = standar horizontal; v01 = vertical mode)
 
 */
 
@@ -85,12 +97,11 @@ f = font (1 - 5)
 
 //OTHERS
 const byte versionMajor = 1;
-const byte versionMinor = 3;
+const byte versionMinor = 4;
 
 //you can change this value to change shown temperature - it's only temperature offset
 //Example: Real temperature is 23°C. Clock shows 26°C. Difference is -3°C. You have to change value to 100 - 3 = 97
 const byte temperatureOffset = 97;	//99 = -1, 100 = 0, 101 = 1
-
 
 //MATRIX DISPLAY
 byte devices = 4;	//count of displays
@@ -111,10 +122,11 @@ unsigned long temperatureTime;	//gat temp
 //IO
 #define BTN1 2
 #define BTN2 3
-bool lastInput1; //last state of #1 input 
-bool lastInput2; //last state of #2 input 
-bool presentInput1; //actual state of input #1
-bool presentInput2; //actual state of input #2
+#define INPUT1 10
+#define INPUT2 11
+bool presentButton1, presentButton2, presentInput1, presentInput2; //actual state of buttons and inputs
+bool lastButton1, lastButton2; //last state button s
+bool edgeButton1, edgeButton2; //edge state buttons
 
 //SYSTEM STATE
 byte systemState;	//0 = show time/date/temp, other = menu
@@ -124,27 +136,67 @@ bool pmDotEnable = false;	//pm dot is shown
 
 //chars
 const uint64_t symbols[] = {
-	0x0000000000000000,	//space
-	0x0018180000181800,	//: - dots (in menu)
-	0x003b66663e060607,	//b - backlight
-	0x000f06060f06361c,	//f - font
-	0x006666667e666666,	//H - hour
-	0x007f66460606060f,	//L - "LMS"
-	0x0063636b7f7f7763,	//M - minute
-	0x003c66701c0e663c,	//S - "Strt"
-	0x00182c0c0c3e0c08,	//t - temperature
-	0x000f06666e3b0000,	//r - Rotate II, "Strt"
-	0x006e33333e303038,	//d (10) - day
-	0x006766363e66663f,	//R - Rotate I
-	0x003c66030303663c,	//C - celsius
-	0x01f204c813204180,	//12/24 - "/" - time mode
-	0x000c1e3333330000,	//v - version
-	0x003e776363636363,	//U - upside down
-	0x1f303e3333330000,	//y - year
-	0x00636b7f7f330000,	//m - month
-	0x001f36666666361f,	//D - show date
-	0x000f06161e16467f,	//F - reserve...maybe for Fahrenheit
-	0x003e676f7b73633e,	//font #1 - 0
+	0x0000000000000000,	//0 - space
+	0x0000000000000000,	//1 - reserve
+	0x0000000000000000,	//2 - reserve
+	0x0000000000000000,	//3 - reserve
+	0x0000000000000000,	//4 - reserve
+	0x0018001818181818,	//5 - !
+	0x0018180000181800,	//6 - :
+	0x01f204c813204180,	//7 - /
+	0x006666667e66663c,	//8 - A
+	0x003e66663e66663e,	//9 - B
+	0x003c66060606663c,	//10 - C
+	0x003e66666666663e,	//11 - D
+	0x007e06063e06067e,	//12 - E
+	0x000606063e06067e,	//13 - F
+	0x003c66760606663c,	//14 - G
+	0x006666667e666666,	//15 - H
+	0x003c18181818183c,	//16 - I
+	0x001c363630303078,	//17 - J
+	0x0066361e0e1e3666,	//18 - K
+	0x007e060606060606,	//19 - L
+	0x006363636b7f7763,	//20 - M
+	0x006363737b6f6763,	//21 - N
+	0x003c66666666663c,	//22 - O
+	0x0006063e6666663e,	//23 - P
+	0x00603c766666663c,	//24 - Q
+	0x0066361e3e66663e,	//25 - R
+	0x003c66603c06663c,	//26 - S
+	0x0018181818185a7e,	//27 - T
+	0x007c666666666666,	//28 - U
+	0x00183c6666666666,	//29 - V
+	0x0063777f6b636363,	//30 - W
+	0x00c6c66c386cc6c6,	//31 - X
+	0x001818183c666666,	//32 - Y
+	0x007e060c1830607e,	//33 - Z
+	0x007c667c603c0000,	//34 - a
+	0x003e66663e060606,	//35 - b
+	0x003c6606663c0000,	//36 - c
+	0x007c66667c606060,	//37 - d
+	0x003c067e663c0000,	//38 - e
+	0x000c0c3e0c0c6c38,	//39 - f
+	0x003c607c66667c00,	//40 - g
+	0x006666663e060606,	//41 - h
+	0x003c181818001800,	//42 - i
+	0x001c363630300030,	//43 - j
+	0x0066361e36660606,	//44 - k
+	0x0018181818181818,	//45 - l
+	0x006b6b7f77630000,	//46 - m
+	0x006666667e3e0000,	//47 - n
+	0x003c6666663c0000,	//48 - o
+	0x0006063e66663e00,	//49 - p
+	0x00f0b03c36363c00,	//50 - q
+	0x00060666663e0000,	//51 - r
+	0x003e403c027c0000,	//52 - s
+	0x001818187e181800,	//53 - t
+	0x007c666666660000,	//54 - u
+	0x00183c6666000000,	//55 - v
+	0x003e6b6b6b630000,	//56 - w
+	0x00663c183c660000,	//57 - x
+	0x003c607c66660000,	//58 - y
+	0x003c0c18303c0000,	//59 - z
+	0x003e676f7b73633e,	//60 - 0 (font 1)
 	0x007e181818181c18,
 	0x007e660c3860663c,
 	0x003c66603860663c,
@@ -154,7 +206,7 @@ const uint64_t symbols[] = {
 	0x001818183060667e,
 	0x003c66663c66663c,
 	0x001c30607c66663c,
-	0x003c66666e76663c,	//font #2 - 0
+	0x003c66666e76663c,	//70 - 0 (font 2)
 	0x007e1818181c1818,
 	0x007e060c3060663c,
 	0x003c66603860663c,
@@ -164,7 +216,7 @@ const uint64_t symbols[] = {
 	0x001818183030667e,
 	0x003c66663c66663c,
 	0x003c66607c66663c,
-	0x1c2222222222221c,	//font #3 - 0
+	0x1c2222222222221c,	//80 - 0 (font 3)
 	0x1c08080808080c08,
 	0x3e0408102020221c,
 	0x1c2220201820221c,
@@ -174,7 +226,7 @@ const uint64_t symbols[] = {
 	0x040404081020203e,
 	0x1c2222221c22221c,
 	0x1c22203c2222221c,
-	0x001c22262a32221c,	//font #4 - 0
+	0x001c22262a32221c,	//90 - 0 (font 4)
 	0x003e080808080c08,
 	0x003e04081020221c,
 	0x001c22201008103e,
@@ -184,7 +236,7 @@ const uint64_t symbols[] = {
 	0x000404040810203e,
 	0x001c22221c22221c,
 	0x000c10203c22221c,
-	0x003c24242424243c,	//font #5 - 0
+	0x003c24242424243c,	//100 - 0 (font 5)
 	0x0020202020202020,
 	0x003c04043c20203c,
 	0x003c20203c20203c,
@@ -196,8 +248,33 @@ const uint64_t symbols[] = {
 	0x003c20203c24243c
 };
 
-byte symbolsLenght = sizeof(symbols) / 80;	//count numbers of symbols
-byte fontOffset = 20;	//count of symbols before 1st number (only 10, 20, 30, ...)
+//some chars for my use...you can add
+#define char_space 0
+#define char_exc 5
+#define char_dot 6
+#define char_slash 7
+
+#define char_C 10
+#define char_D 11
+#define char_H 15
+#define char_L 19
+#define char_M 20
+#define char_R 25
+#define char_S 26
+#define char_U 28
+
+#define char_b 35
+#define char_d 37
+#define char_f 39
+#define char_m 46
+#define char_r 51
+#define char_t 53
+#define char_v 55
+#define char_y 58
+
+
+byte fontCount = 5;	//how many fonts is used
+byte fontOffset = 60;	//count of symbols before 1st number
 
 //default values...but they are load from EEPROM
 byte bright = 7;
@@ -209,6 +286,7 @@ byte rotateFont2 = 0;	//font rotateing verticaly (all display)
 byte showDate = 0;	//how many second in one minute cycle is date shown
 byte showTemperature = 0;	//how many second in one minute cycle is temperature shown
 byte upsideDown = 0;	//us font Upside down
+byte verticalMode = 0;	//clock is vertical
 
 
 void setup() {
@@ -220,6 +298,8 @@ void setup() {
 	//there is internal pull-up used - read variables are negated
 	pinMode(BTN1, INPUT_PULLUP);
 	pinMode(BTN2, INPUT_PULLUP);
+	pinMode(INPUT1, INPUT_PULLUP);
+	pinMode(INPUT2, INPUT_PULLUP);
 
 	bright = EEPROM.read(0);	//load light intensity from EEPROM
 	if (bright < 0 || bright > 15) {
@@ -228,7 +308,7 @@ void setup() {
 	}
 
 	font = EEPROM.read(1);	//load font style from EEPROM
-	if (font < 1 || font > symbolsLenght - (fontOffset/10)) {
+	if (font < 1 || font > fontCount) {
 		//in case variable out of range
 		font = 1;
 	}
@@ -275,6 +355,12 @@ void setup() {
 		upsideDown = 0;
 	}
 
+	verticalMode = EEPROM.read(9);	//load vertical mode from EEPROM
+	if (verticalMode < 0 || verticalMode > 1) {
+		//in case variable out of range
+		verticalMode = 0;
+	}
+
 	delay(10);	//just small delay...I thing I have had add it for correct function of display
 
 	//SET ALL DISPLAYS
@@ -287,20 +373,26 @@ void setup() {
 	/*
 	//INIT TIME SETTING
 	//You can use this for first setup
-	//Do not forget deactivate it!
+	//!!! Do not forget deactivate it !!!
 	SetRtc(15, 41, 8, 6, 30, 3, 18);	//sec, min, hour, dayOfWeek, dayOfMonth, month, year
 	*/
 
-	Intro();	//show LMS and version
+	Intro();	//show LMS! and version
 	Serial.println("Send '?' for help");
 
 	GetTemperature();	//just for start
 }
 
 void loop() {
-	//store input to variarbe
-	presentInput1 = digitalRead(BTN1);
-	presentInput2 = digitalRead(BTN2);
+	//store input to variarbe (and nagete because pullups are used)
+	presentButton1 = !digitalRead(BTN1);
+	presentButton2 = !digitalRead(BTN2);
+	presentInput1 = !digitalRead(INPUT1);
+	presentInput2 = !digitalRead(INPUT2);
+
+	//edge detection
+	edgeButton1 = (presentButton1 ^ lastButton1) & !presentButton1;
+	edgeButton2 = (presentButton2 ^ lastButton2) & !presentButton2;
 
 	switch (systemState) {
 	case 0:
@@ -316,26 +408,56 @@ void loop() {
 		//0.5 second trigger
 		if (presentTime - displayTime >= 500) {
 			displayTime = presentTime;
-
 			GetRtc();		//get actual time
-			WriteTime();	//write actual time (etc) to matrix display
+
+			//show some message or time
+			if (presentInput1 && !presentInput2) {
+				//IN1 = 1, IN2 = 0
+				//MESSAGE 1 - blank display
+				DrawSymbol(3, char_space);	//space
+				DrawSymbol(2, char_space);	//space
+				DrawSymbol(1, char_space);	//space
+				DrawSymbol(0, char_space);	//space
+			}
+			else if (!presentInput1 && presentInput2) {
+				//IN1 = 0, IN2 = 1
+				//MESSAGE 1 - LMS!
+				DrawSymbol(3, char_L);	//L
+				DrawSymbol(2, char_M);	//M
+				DrawSymbol(1, char_S);	//S
+				DrawSymbol(0, char_exc);	//!
+			}
+			else if (presentInput1 && presentInput2) {
+				//IN1 = 1, IN2 = 1
+				//MESSAGE 2 - version
+				DrawSymbol(3, char_v);	//v
+				DrawSymbol(2, versionMajor + fontOffset);
+				DrawSymbol(1, char_dot);	//:
+				DrawSymbol(0, versionMinor + fontOffset);
+			}
+			else {
+				//IN1 = 0, IN2 = 0
+				//show time (or date, etc.)
+				WriteTime();	//write actual time (etc) to matrix display
+			}
+			
 		}
 
-		if (!presentInput1 && !presentInput2) {
+		if (presentButton1 && presentButton2) {
 			systemState = 1;
 			//go to "pre"menu
 		}
 		break;
 
 	case 1:
-		if (presentInput1 && presentInput2) {
+		if (!presentButton1 && !presentButton2) {
 			//NEXT
 			GetRtc();		//get actual time (read time in 24h format - in menu is always 24h time format)
 			systemState++; //Go to menu
-			DrawSymbol(3, 0);	//space
-			DrawSymbol(2, 0);	//space
-			DrawSymbol(1, 0);	//space
-			DrawSymbol(0, 4);	//H
+			DrawSymbol(3, char_space);	//space
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, char_space);	//space
+			DrawSymbol(0, char_H);	//H
 		}
 		break;
 
@@ -344,29 +466,23 @@ void loop() {
 		//set HOURS
 		WriteTime();
 
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 6);	//M
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, 0);	//space
-				DrawSymbol(0, 0);	//space
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_M);	//M
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, char_space);	//space
+			DrawSymbol(0, char_space);	//space
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//add hour
-				hour++;
-				if (hour > 23) {
-					hour = 0;
-				}
+		if (edgeButton2) {
+			//rising edge detected
+			//add hour
+			hour++;
+			if (hour > 23) {
+				hour = 0;
 			}
 		}
 		break;
@@ -376,29 +492,23 @@ void loop() {
 		//set MINUTES
 		WriteTime();
 
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 16);	//y
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (year / 10) + fontOffset);	//actual font
-				DrawSymbol(0, (year % 10) + fontOffset);	//actual font
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_y);	//y
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (year / 10) + fontOffset);	//actual year
+			DrawSymbol(0, (year % 10) + fontOffset);	//actual year
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//add minutes
-				minute++;
-				if (minute > 59) {
-					minute = 0;
-				}
+		if (edgeButton2) {
+			//rising edge detected
+			//add minutes
+			minute++;
+			if (minute > 59) {
+				minute = 0;
 			}
 		}
 		break;
@@ -406,360 +516,306 @@ void loop() {
 	case 4:
 		//menu 4
 		//set YEAR
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 17);	//m
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (month / 10) +  fontOffset);	//actual font
-				DrawSymbol(0, (month % 10) +  fontOffset);	//actual font
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_m);	//m
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (month / 10) +  fontOffset);	//actual month
+			DrawSymbol(0, (month % 10) +  fontOffset);	//actual month
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//add year
-				year++;
-				if (year > 50) {
-					year = 19;
-				}
-
-				DrawSymbol(3, 16);	//y
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (year / 10) + fontOffset);	//actual font
-				DrawSymbol(0, (year % 10) + fontOffset);	//actual font
-
-				delay(25);
+		if (edgeButton2) {
+			//rising edge detected
+			//add year
+			year++;
+			if (year > 50) {
+				year = 19;
 			}
+
+			DrawSymbol(3, char_y);	//y
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (year / 10) + fontOffset);	//actual year
+			DrawSymbol(0, (year % 10) + fontOffset);	//actual year
+
+			delay(25);
 		}
 		break;
 
 	case 5:
 		//menu 5
 		//set MONTH
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 10);	//d
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (dayOfMonth / 10) + fontOffset);	//actual font
-				DrawSymbol(0, (dayOfMonth % 10) + fontOffset);	//actual font
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_d);	//d
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (dayOfMonth / 10) + fontOffset);	//actual day of month
+			DrawSymbol(0, (dayOfMonth % 10) + fontOffset);	//actual day of month
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//add month
-				month++;
-				if (month > 12) {
-					month = 1;
-				}
-
-				DrawSymbol(3, 6);	//M
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (month / 10) + fontOffset);	//actual font
-				DrawSymbol(0, (month % 10) + fontOffset);	//actual font
-
-				delay(25);
+		if (edgeButton2) {
+			//rising edge detected
+			//add month
+			month++;
+			if (month > 12) {
+				month = 1;
 			}
+
+			DrawSymbol(3, char_M);	//M
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (month / 10) + fontOffset);	//actual month
+			DrawSymbol(0, (month % 10) + fontOffset);	//actual month
+
+			delay(25);
 		}
 		break;
 
 	case 6:
 		//menu 6
 		//set DAY
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 13);	//12/24
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (timeMode1224 / 10) + fontOffset);	//actual time mode
-				DrawSymbol(0, (timeMode1224 % 10) + fontOffset);	//actual time mode
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_slash);	//12/24
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (timeMode1224 / 10) + fontOffset);	//actual time mode
+			DrawSymbol(0, (timeMode1224 % 10) + fontOffset);	//actual time mode
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//add day of month
-				dayOfMonth++;
+		if (edgeButton2) {
+			//rising edge detected
+			//add day of month
+			dayOfMonth++;
 
-				if (month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
-					if (dayOfMonth > 31) {
-						dayOfMonth = 1;
-					}
+			if (month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
+				if (dayOfMonth > 31) {
+					dayOfMonth = 1;
 				}
-
-				if (month == 4 || month == 6|| month == 9 || month == 11) {
-					if (dayOfMonth > 30) {
-						dayOfMonth = 1;
-					}
-				}
-
-				if (month == 2) {
-					if (CheckLeapYear(year)) {
-						//leap year
-						if (dayOfMonth > 29) {
-							dayOfMonth = 1;
-						}
-					}
-					else {
-						if (dayOfMonth > 28) {
-							dayOfMonth = 1;
-						}
-					}
-				}
-
-				DrawSymbol(3, 10);	//d
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (dayOfMonth / 10) + fontOffset);	//actual day
-				DrawSymbol(0, (dayOfMonth % 10) + fontOffset);	//actual day
-
-				delay(25);
 			}
+
+			if (month == 4 || month == 6|| month == 9 || month == 11) {
+				if (dayOfMonth > 30) {
+					dayOfMonth = 1;
+				}
+			}
+
+			if (month == 2) {
+				if (CheckLeapYear(year)) {
+					//leap year
+					if (dayOfMonth > 29) {
+						dayOfMonth = 1;
+					}
+				}
+				else {
+					if (dayOfMonth > 28) {
+						dayOfMonth = 1;
+					}
+				}
+			}
+
+			DrawSymbol(3, char_d);	//d
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (dayOfMonth / 10) + fontOffset);	//actual day of month
+			DrawSymbol(0, (dayOfMonth % 10) + fontOffset);	//actual day of month
+
+			delay(25);
 		}
 		break;
 
 	case 7:
 		//menu 7
 		//set 12/24 MODE
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 18);	//date
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (showDate / 10) + fontOffset);	//actual show date time
-				DrawSymbol(0, (showDate % 10) + fontOffset);	//actual show date time
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_D);	//date
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (showDate / 10) + fontOffset);	//show date
+			DrawSymbol(0, (showDate % 10) + fontOffset);	//show date
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//set 12/24 mode
-				timeMode1224++;
-				if (timeMode1224 > 1) {
-					timeMode1224 = 0;
-				}
-
-				DrawSymbol(3, 13);	//12/24
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (timeMode1224 / 10) + fontOffset);	//actual time mode
-				DrawSymbol(0, (timeMode1224 % 10) + fontOffset);	//actual time mode
-
-				delay(25);
+		if (edgeButton2) {
+			//rising edge detected
+			//set 12/24 mode
+			timeMode1224++;
+			if (timeMode1224 > 1) {
+				timeMode1224 = 0;
 			}
+
+			DrawSymbol(3, char_slash);	//12/24
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (timeMode1224 / 10) + fontOffset);	//actual time mode
+			DrawSymbol(0, (timeMode1224 % 10) + fontOffset);	//actual time mode
+
+			delay(25);
 		}
 		break;
 
 	case 8:
 		//menu 8
 		//show show DATE
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 8);	//t - temperature
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (showTemperature / 10) + fontOffset);	//actual show temp time
-				DrawSymbol(0, (showTemperature % 10) + fontOffset);	//actual show temp time
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_t);	//t - temperature
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (showTemperature / 10) + fontOffset);	//actual show temp
+			DrawSymbol(0, (showTemperature % 10) + fontOffset);	//actual show temp
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//set show date
-				showDate++;
-				if (showDate > 60) {
-					showDate = 0;
-				}
-
-				DrawSymbol(3, 18);	//date
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (showDate / 10) + fontOffset);	//actual show date time
-				DrawSymbol(0, (showDate % 10) + fontOffset);	//actual show date time
-
-				delay(25);
+		if (edgeButton2) {
+			//rising edge detected
+			//set show date
+			showDate++;
+			if (showDate > 60) {
+				showDate = 0;
 			}
+
+			DrawSymbol(3, char_D);	//date
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (showDate / 10) + fontOffset);	//actual show date
+			DrawSymbol(0, (showDate % 10) + fontOffset);	//actual show date
+
+			delay(25);
 		}
 		break;
 
 	case 9:
 		//menu 9
 		//show TEMPERATURE
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 3);	//F
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (font / 10) + (font * 10) + fontOffset - 10);	//actual font
-				DrawSymbol(0, (font % 10) + (font * 10) + fontOffset - 10);	//actual font
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_f);	//F
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (font / 10) + (font * 10) + fontOffset - 10);	//actual font
+			DrawSymbol(0, (font % 10) + (font * 10) + fontOffset - 10);	//actual font
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//set show temperature
-				showTemperature++;
-				if (showTemperature > 60) {
-					showTemperature = 0;
-				}
-
-				DrawSymbol(3, 8);	//t - temperature
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (showTemperature / 10) + fontOffset);	//actual show temp time
-				DrawSymbol(0, (showTemperature % 10) + fontOffset);	//actual show temp time
-
-				delay(25);
+		if (edgeButton2) {
+			//rising edge detected
+			//set show temperature
+			showTemperature++;
+			if (showTemperature > 60) {
+				showTemperature = 0;
 			}
+
+			DrawSymbol(3, char_t);	//t - temperature
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (showTemperature / 10) + fontOffset);	//actual show temp
+			DrawSymbol(0, (showTemperature % 10) + fontOffset);	//actual show temp
+
+			delay(25);
 		}
 		break;
 
 	case 10:
 		//menu 10
 		//set FONT
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 1);	//:
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (dotStyle / 10) + fontOffset);	//actual dot style
-				DrawSymbol(0, (dotStyle % 10) + fontOffset);	//actual dot style
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_dot);	//:
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (dotStyle / 10) + fontOffset);	//actual dot style
+			DrawSymbol(0, (dotStyle % 10) + fontOffset);	//actual dot style
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//set font
-				font++;
-				if (font > symbolsLenght - (fontOffset / 10)) {
-					font = 1;
-				}
-
-				DrawSymbol(3, 3);	//F
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (font / 10) + (font * 10) + fontOffset - 10);	//actual font
-				DrawSymbol(0, (font % 10) + (font * 10) + fontOffset - 10);	//actual font
-
-				delay(25);
+		if (edgeButton2) {
+			//rising edge detected
+			//set font
+			font++;
+			if (font > fontCount) {
+				font = 1;
 			}
+
+			DrawSymbol(3, char_f);	//F
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (font / 10) + (font * 10) + fontOffset - 10);	//actual font
+			DrawSymbol(0, (font % 10) + (font * 10) + fontOffset - 10);	//actual font
+
+			delay(25);
 		}
 		break;
 
 	case 11:
 		//menu 11
 		//set DOT STYLE
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 2);	//B
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (bright / 10) + fontOffset);	//actual light intensity
-				DrawSymbol(0, (bright % 10) + fontOffset);	//actual light intensity
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_b);	//B
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (bright / 10) + fontOffset);	//actual light intensity
+			DrawSymbol(0, (bright % 10) + fontOffset);	//actual light intensity
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//set dot style
-				dotStyle++;
-				if (dotStyle > 2) {
-					dotStyle = 0;
-				}
-
-				DrawSymbol(3, 1);	//:
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (dotStyle / 10) + fontOffset);	//actual dot style
-				DrawSymbol(0, (dotStyle % 10) + fontOffset);	//actual dot style
-
-				delay(25);
+		if (edgeButton2) {
+			//rising edge detected
+			//set dot style
+			dotStyle++;
+			if (dotStyle > 2) {
+				dotStyle = 0;
 			}
+
+			DrawSymbol(3, char_dot);	//:
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (dotStyle / 10) + fontOffset);	//actual dot style
+			DrawSymbol(0, (dotStyle % 10) + fontOffset);	//actual dot style
+
+			delay(25);
 		}
 		break;
 
 	case 12:
 		//menu 12
 		//set BRIGHTNES
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 11);	//R
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (rotateFont1 / 10) + fontOffset);	//actual rotate font 1
-				DrawSymbol(0, (rotateFont1 % 10) + fontOffset);	//actual rotate font 1
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_R);	//R
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (rotateFont1 / 10) + fontOffset);	//actual rotate font 1
+			DrawSymbol(0, (rotateFont1 % 10) + fontOffset);	//actual rotate font 1
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//add brightness
-				bright++;
-				if (bright > 15) {
-					bright = 0;			
-				}
-				
-				DrawSymbol(3, 2);	//B
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (bright / 10) + fontOffset);	//actual light intensity
-				DrawSymbol(0, (bright % 10) + fontOffset);	//actual light intensity
-
-				for (byte address = 0; address<devices; address++) {
-					lc.setIntensity(address, bright);	//set light intensity 0 - min, 15 - max
-				}
-
-				delay(25);
+		if (edgeButton2) {
+			//rising edge detected
+			//add brightness
+			bright++;
+			if (bright > 15) {
+				bright = 0;			
 			}
+				
+			DrawSymbol(3, char_b);	//B
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (bright / 10) + fontOffset);	//actual light intensity
+			DrawSymbol(0, (bright % 10) + fontOffset);	//actual light intensity
+
+			for (byte address = 0; address<devices; address++) {
+				lc.setIntensity(address, bright);	//set light intensity 0 - min, 15 - max
+			}
+
+			delay(25);
 		}
 		break;
 
@@ -767,37 +823,31 @@ void loop() {
 		//menu 13
 		//set rotate FONT 1
 		//Rotate each symbol separately (vertical)
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 9);	//r
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (rotateFont2 / 10) + fontOffset);	//actual rotate font 2
-				DrawSymbol(0, (rotateFont2 % 10) + fontOffset);	//actual rotate font 2
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_r);	//r
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (rotateFont2 / 10) + fontOffset);	//actual rotate font 2
+			DrawSymbol(0, (rotateFont2 % 10) + fontOffset);	//actual rotate font 2
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//set font rotateing
-				rotateFont1++;
-				if (rotateFont1 > 1) {
-					rotateFont1 = 0;
-				}
-
-				DrawSymbol(3, 11);	//R
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (rotateFont1 / 10) + fontOffset);	//actual rotate font 1
-				DrawSymbol(0, (rotateFont1 % 10) + fontOffset);	//actual rotate font 1
-
-				delay(25);
+		if (edgeButton2) {
+			//rising edge detected
+			//set font rotateing
+			rotateFont1++;
+			if (rotateFont1 > 1) {
+				rotateFont1 = 0;
 			}
+
+			DrawSymbol(3, char_R);	//R
+			DrawSymbol(2, 0);	//space
+			DrawSymbol(1, (rotateFont1 / 10) + fontOffset);	//actual rotate font 1
+			DrawSymbol(0, (rotateFont1 % 10) + fontOffset);	//actual rotate font 1
+
+			delay(25);
 		}
 		break;
 
@@ -805,37 +855,31 @@ void loop() {
 		//menu 14
 		//set rotate FONT 2
 		//Rotate all display (verticaly)
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 15);	//U
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (upsideDown / 10) + fontOffset);	//actual rotate font 2
-				DrawSymbol(0, (upsideDown % 10) + fontOffset);	//actual rotate font 2
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_U);	//U
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (upsideDown / 10) + fontOffset);	//actual rotate font 2
+			DrawSymbol(0, (upsideDown % 10) + fontOffset);	//actual rotate font 2
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//set font rotateing
-				rotateFont2++;
-				if (rotateFont2 > 1) {
-					rotateFont2 = 0;
-				}
-
-				DrawSymbol(3, 9);	//r
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (rotateFont2 / 10) + fontOffset);	//actual rotate font 2
-				DrawSymbol(0, (rotateFont2 % 10) + fontOffset);	//actual rotate font 2
-
-				delay(25);
+		if (edgeButton2) {
+			//rising edge detected
+			//set font rotateing
+			rotateFont2++;
+			if (rotateFont2 > 1) {
+				rotateFont2 = 0;
 			}
+
+			DrawSymbol(3, char_r);	//r
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (rotateFont2 / 10) + fontOffset);	//actual rotate font 2
+			DrawSymbol(0, (rotateFont2 % 10) + fontOffset);	//actual rotate font 2
+
+			delay(25);
 		}
 		break;
 
@@ -843,69 +887,91 @@ void loop() {
 		//menu 15
 		//set rotate upsidedown
 		//Rotate all display (horizontaly)
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
+		if (edgeButton1) {
+			//rising edge detected
 
-				//NEXT
-				systemState++;
-				DrawSymbol(3, 7);	//S
-				DrawSymbol(2, 8);	//t
-				DrawSymbol(1, 9);	//r
-				DrawSymbol(0, 8);	//t
-			}
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_v);	//v
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (verticalMode / 10) + fontOffset);	//actual vertical mode
+			DrawSymbol(0, (verticalMode % 10) + fontOffset);	//actual vertical mode
 		}
 
-		if (presentInput2 != lastInput2) {
-			//change detected BTN2
-			if (presentInput2) {
-				//rising edge detected
-				//set font rotateing
-				upsideDown++;
-				if (upsideDown > 1) {
-					upsideDown = 0;
-				}
-
-				DrawSymbol(3, 15);	//U
-				DrawSymbol(2, 0);	//space
-				DrawSymbol(1, (upsideDown / 10) + fontOffset);	//actual rotate font 2
-				DrawSymbol(0, (upsideDown % 10) + fontOffset);	//actual rotate font 2
-
-				delay(25);
+		if (edgeButton2) {
+			//rising edge detected
+			//set font rotateing
+			upsideDown++;
+			if (upsideDown > 1) {
+				upsideDown = 0;
 			}
+
+			DrawSymbol(3, char_U);	//U
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (upsideDown / 10) + fontOffset);	//actual rotate font 2
+			DrawSymbol(0, (upsideDown % 10) + fontOffset);	//actual rotate font 2
+
+			delay(25);
 		}
 		break;
 
 	case 16:
-		//menu 16
-		//EXIT
-		if (presentInput1 != lastInput1) {
-			//change detected BTN1
-			if (presentInput1) {
-				//rising edge detected
-				//because this clock do not have date (calendar) this clock do not set days, monts etc.
-				//but you can set these variables via serial port
-				SetRtc(0, minute, hour, dayOfWeek, dayOfMonth, month, year);	//set time and zero second
+		//menu 15
+		//set vertical mode
+		//Rotate all display (horizontaly)
+		if (edgeButton1) {
+			//rising edge detected
 
-				EEPROM.write(0, bright);	//store actual light intensity to addr 0
-				EEPROM.write(1, font);	//store actual font to addr 1
-				EEPROM.write(2, dotStyle);	//store actual font to addr 2
-				EEPROM.write(3, showTemperature);	//store temperature time to addr 3
-				EEPROM.write(4, rotateFont1);	//store rotate font1 to addr 4
-				EEPROM.write(5, rotateFont2);	//store rotate font2 to addr 5
-				EEPROM.write(6, timeMode1224);	//store 12/24 mode to addr 6
-				EEPROM.write(7, showDate);	//store date time to eeprom
-				EEPROM.write(8, upsideDown);	//store upsideDown rotate to EEPROM
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_S);	//S
+			DrawSymbol(2, char_t);	//t
+			DrawSymbol(1, char_r);	//r
+			DrawSymbol(0, char_t);	//t
+		}
 
-				systemState = 0;	//show actual time
+		if (edgeButton2) {
+			//rising edge detected
+			//set font rotateing
+			verticalMode++;
+			if (verticalMode > 1) {
+				verticalMode = 0;
 			}
+
+			DrawSymbol(3, char_v);	//v
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (verticalMode / 10) + fontOffset);	//actual vertical mode
+			DrawSymbol(0, (verticalMode % 10) + fontOffset);	//actual vertical mode
+
+			delay(25);
+		}
+		break;
+
+	case 17:
+		//menu 17
+		//EXIT
+		if (edgeButton1) {
+			//rising edge detected
+			SetRtc(0, minute, hour, dayOfWeek, dayOfMonth, month, year);	//set time and zero second
+
+			EEPROM.write(0, bright);	//store actual light intensity to addr 0
+			EEPROM.write(1, font);	//store actual font to addr 1
+			EEPROM.write(2, dotStyle);	//store actual font to addr 2
+			EEPROM.write(3, showTemperature);	//store temperature time to addr 3
+			EEPROM.write(4, rotateFont1);	//store rotate font1 to addr 4
+			EEPROM.write(5, rotateFont2);	//store rotate font2 to addr 5
+			EEPROM.write(6, timeMode1224);	//store 12/24 mode to addr 6
+			EEPROM.write(7, showDate);	//store date time to eeprom
+			EEPROM.write(8, upsideDown);	//store upsideDown rotate to EEPROM
+			EEPROM.write(9, verticalMode);	//store vertical mode to EEPROM
+
+			systemState = 0;	//show actual time
 		}
 		break;
 	}
 
-	lastInput1 = presentInput1; //save current state to last state
-	lastInput2 = presentInput2; //save current state to last state
+	lastButton1 = presentButton1; //save current state to last state
+	lastButton2 = presentButton2; //save current state to last state
 
 	SerialComm();	//read data from PC
 }
@@ -1048,7 +1114,7 @@ void WriteTime() {
 				break;
 			}
 
-			DrawSymbol(0, 12);	//draw "C" symbol
+			DrawSymbol(0, char_C);	//draw "C" symbol
 			showDots = false;	//hide dots (colon)
 			pmDotEnable = false;	//hide PM dot
 			break;
@@ -1060,19 +1126,17 @@ void WriteTime() {
 }
 
 void Intro() {
-	DrawSymbol(3, 5);	//L
-	DrawSymbol(2, 6);	//M
-	DrawSymbol(1, 7);	//S
-	DrawSymbol(0, 0);	//space
-
+	DrawSymbol(3, char_L);	//L
+	DrawSymbol(2, char_M);	//M
+	DrawSymbol(1, char_S);	//S
+	DrawSymbol(0, char_exc);	//!
 	delay(2000);
 
 	//version of fw
-	DrawSymbol(3, 14);	//v
-	DrawSymbol(2, versionMajor + fontOffset);	//1
-	DrawSymbol(1, 1);	//:
-	DrawSymbol(0, versionMinor + fontOffset);	//3
-
+	DrawSymbol(3, char_v);	//v
+	DrawSymbol(2, versionMajor + fontOffset);
+	DrawSymbol(1, char_dot);	//:
+	DrawSymbol(0, versionMinor + fontOffset);
 	delay(2000);
 }
 
@@ -1093,25 +1157,50 @@ void DrawSymbol(byte adr, byte symbol) {
 		}
 		
 		byte row = (symbols[symbol] >> i * 8) & 0xFF;	//just some magic
-		lc.setRow(adr, j, ByteRevers(row));
 
-		//blinking dots on display
-		//I have to draw "dots" during draw symbol. In other case it's blinking.
-		//Better variant would update symbol before draw - before FOR structure. Maybe in next version :)
-		if (adr == 2 && dotStyle > 0){
-			//colon
-			if (i == 1) lc.setLed(adr, 1, 7, showDots);  //addr, row, column
-			if (i == 2) lc.setLed(adr, 2, 7, showDots);
-			if (i == 5) lc.setLed(adr, 5, 7, showDots);
-			if (i == 6) lc.setLed(adr, 6, 7, showDots);
+		if (verticalMode == 1) {
+			//vertical mode
+			lc.setColumn(adr, j, ByteRevers(row));
+
+			//blinking dots on display
+			//I have to draw "dots" during draw symbol. In other case it's blinking.
+			//Better variant would update symbol before draw - before FOR structure. Maybe in next version :)
+			if (adr == 2 && dotStyle > 0 && i == 7) {
+				//colon
+				lc.setLed(adr, 1, 7, showDots);  //addr, row, column
+				lc.setLed(adr, 2, 7, showDots);
+				lc.setLed(adr, 5, 7, showDots);
+				lc.setLed(adr, 6, 7, showDots);
+			}
+
+			if (adr == 2 && systemState == 0 && (showMode == 1 || showMode == 2)) {
+				//date and temperature point
+				lc.setLed(adr, 1, 7, true);
+				lc.setLed(adr, 2, 7, true);
+			}
+		}
+		else {
+			//horizontal mode
+			lc.setRow(adr, j, ByteRevers(row));
+
+			//blinking dots on display
+			//I have to draw "dots" during draw symbol. In other case it's blinking.
+			//Better variant would update symbol before draw - before FOR structure. Maybe in next version :)
+			if (adr == 2 && dotStyle > 0) {
+				//colon
+				if (i == 1) lc.setLed(adr, 1, 7, showDots);  //addr, row, column
+				if (i == 2) lc.setLed(adr, 2, 7, showDots);
+				if (i == 5) lc.setLed(adr, 5, 7, showDots);
+				if (i == 6) lc.setLed(adr, 6, 7, showDots);
+			}
+
+			if (adr == 2 && systemState == 0 && (showMode == 1 || showMode == 2)) {
+				//date and temperature point
+				if (i == 5) lc.setLed(adr, 5, 7, true);
+				if (i == 6) lc.setLed(adr, 6, 7, true);
+			}
 		}
 		
-		if (adr == 2 && systemState == 0 && (showMode == 1 || showMode == 2)) {
-			//date and temperature point
-			if (i == 5) lc.setLed(2, 5, 7, true);
-			if (i == 6) lc.setLed(2, 6, 7, true);
-		}
-
 		if (adr == 0) {
 			//PM point
 			lc.setLed(0, 7, 7, pmDotEnable);
@@ -1121,7 +1210,7 @@ void DrawSymbol(byte adr, byte symbol) {
 
 byte ByteRevers(byte in) {
 	//font rotateing
-	if (rotateFont1 == 1) {
+	if ((rotateFont1 == 1 && verticalMode == 0) || (rotateFont1 == 0 && verticalMode == 1)) {
 		//do not rotate
 		return(in);
 	}
@@ -1359,7 +1448,16 @@ void SerialComm() {
 			}
 			showTemperature = receivedData;
 			lc.setLed(3, 7, 0, true);	//show setting dot
-			EEPROM.write(3, showTemperature);	//save
+			EEPROM.write(5, showTemperature);	//save
+			break;
+		case 118:
+			//verticalMode 118 = v
+			if (receivedData > 1) {
+				receivedData = 0;
+			}
+			verticalMode = receivedData;
+			lc.setLed(3, 7, 0, true);	//show setting dot
+			EEPROM.write(9, verticalMode);	//save
 			break;
 		case 119:
 			//dayofWeek 119 = w
@@ -1451,6 +1549,10 @@ void SerialComm() {
 			Serial.println("");
 			Serial.println("Dot style (: 00-02): ");
 			Serial.println(dotStyle);
+
+			Serial.println("");
+			Serial.println("Vertical mode (v 00-01): ");
+			Serial.println(verticalMode);
 			break;
 		}
 		//flush serial data
