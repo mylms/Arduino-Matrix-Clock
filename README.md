@@ -1,8 +1,8 @@
-# Arduino-Matrix-Clock v1.3
+# Arduino-Matrix-Clock v1.4
 
 Simple Arduino Clock with LED matrix display 32 x 8 pix. In this sketch is LedControl library (https://github.com/wayoda/LedControl) used.
 
-Version 1.3 can show temperature and it is posible to turn font UpsideDown.
+In version 1.4 you can use clock verticaly and show some short messages (you can use two inputs).
 
 
 Menu:
@@ -21,7 +21,8 @@ Menu:
 - t: Show temperature (what second is temperature shown 00 = newer, 60 = always)
 - R: Font turning 1 (turn each character; 00 = off, 01 = on)
 - r: Font turning 2 (turn all diplay; 00 = off, 01 = on)
-- U: Turn font UpsideDown (new; 00 = off, 01 = on)
+- U: Turn font UpsideDown (00 = off, 01 = on)
+- v: Vertical mode (new; 00 - standard horizontal, 01 - vertical mode)
 - Strt: Reset second after press the button and show actual time
 
 You need:
