@@ -34,7 +34,7 @@ H = hour, M = minute,
 y = year, m = month, d = day,
 AM/PM = time format 12/24 h, 
 F = font, : = dots, B = brightness, RI = rotate font 1, RII = rotate font 2, U = rotate font upside down, v = vertical mode
-Strt = start (second are set to 0 after press the button)
+Strt = start (second are set to 0 after release the button)
 
 How the clock show time (T), date (D) and temerature (t)
 There are few examples
@@ -87,7 +87,7 @@ b = brightness (0 - 15)
 f = font (1 - 5)
 / = 12/24 hour format (/00 = 12h; /01 = 24h)
 : = dot style (:00 = not shown; :01 = always lit; :02 = blinking)
-v = vertical mode (v00 = standar horizontal; v01 = vertical mode)
+v = vertical mode (v00 = standard horizontal; v01 = vertical mode)
 
 */
 
