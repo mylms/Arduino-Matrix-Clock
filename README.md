@@ -2,8 +2,7 @@
 
 Simple Arduino Clock with LED matrix display 32 x 8 pix. In this sketch is LedControl library (https://github.com/wayoda/LedControl) used.
 
-In version 1.4 you can use clock verticaly and show some short messages (you can use two inputs).
-
+In version 1.4 you can use clock verticaly and show some short messages (you can use two inputs). If you connect input 10 and/or 11 to GND you can show one of them. Text of message you can upgrade only in code, see row around 400 (look for '//show some message or time'). More information in code.
 
 Menu:
 - H: Hours
@@ -22,8 +21,8 @@ Menu:
 - R: Font turning 1 (turn each character; 00 = off, 01 = on)
 - r: Font turning 2 (turn all diplay; 00 = off, 01 = on)
 - U: Turn font UpsideDown (00 = off, 01 = on)
-- v: Vertical mode (new; 00 - standard horizontal, 01 - vertical mode)
-- Strt: Reset second after press the button and show actual time
+- v: Vertical mode (00 - standard horizontal, 01 - vertical mode)
+- Strt: Reset second (set to 0) after release the button and show actual time
 
 You need:
 - Arduino Nano
