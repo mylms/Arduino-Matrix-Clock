@@ -2,7 +2,7 @@
 
 Simple Arduino Clock with LED matrix display 32 x 8 pix. In this sketch is LedControl library (https://github.com/wayoda/LedControl) used.
 
-In version 1.4 you can use clock verticaly and show some short messages (you can use two inputs). If you connect input 10 and/or 11 to GND you can show one of them. Text of message you can upgrade only in code, see row around 400 (look for '//show some message or time'). More information in code.
+In version 1.4 you can use clock verticaly and show some short messages (you can use two inputs). If you connect input 10 and/or 11 to GND you can show one of them. You can upgrade text of message only in code, see row around 410 (look for '//show some message or time'). More information in code.
 
 Menu:
 - H: Hours
