@@ -1,7 +1,7 @@
 /*
 Name:		ArduinoMatrixClock.ino
 Created:	16.01.2018 20:56:49
-Last rev.:	05.07.2019
+Last rev.:	15.08.2019
 Version:	1.4
 Author:		Petan (www.mylms.cz)
 */
@@ -54,6 +54,7 @@ Date (D) and temperature (t) are set to 40. Date has priority. Temperature (t) w
 Date (D) and temperature (t) is set to 60. Date has priority. Time (T) and temperature (t) will not show
 0DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD60 second
 
+
 SHOW MESSAGE
 In v1.4 you can show some message (only 4 chars). If you connect input 10 and/or 11 to GND you can show one of them.
 Text of message you can upgrade only in this code, see row around 400 (look for '//show some message or time').
@@ -63,6 +64,7 @@ IN10	|	IN11	|	OUT
 0		|	1		|	message 1
 1		|	0		|	message 2
 1		|	1		|	message 3
+
 
 SERIAL COMMUNICATION (9600b)
 You have to send three chars. 1st is function, other two are digits
@@ -87,7 +89,7 @@ b = brightness (0 - 15)
 f = font (1 - 5)
 / = 12/24 hour format (/00 = 12h; /01 = 24h)
 : = dot style (:00 = not shown; :01 = always lit; :02 = blinking)
-v = vertical mode (v00 = standard horizontal; v01 = vertical mode)
+v = vertical mode (v00 = standar horizontal; v01 = vertical mode)
 
 */
 
@@ -95,13 +97,14 @@ v = vertical mode (v00 = standard horizontal; v01 = vertical mode)
 #include <Wire.h>
 #include <LedControl.h>
 
+//YOU CAN CHANGE THIS VALUE TO CHANGE SHOWN TEMPERATURE - IT'S ONLY TEMPERATURE OFFSET
+//Example: Real temperature is 23°C. Clock shows 26°C. Difference is -3°C. You have to change value to 100 - 3 = 97
+const byte temperatureOffset = 97;	//99 = -1, 100 = 0, 101 = 1 (only integer values)
+
+
 //OTHERS
 const byte versionMajor = 1;
 const byte versionMinor = 4;
-
-//you can change this value to change shown temperature - it's only temperature offset
-//Example: Real temperature is 23°C. Clock shows 26°C. Difference is -3°C. You have to change value to 100 - 3 = 97
-const byte temperatureOffset = 97;	//99 = -1, 100 = 0, 101 = 1
 
 //MATRIX DISPLAY
 byte devices = 4;	//count of displays
@@ -124,6 +127,7 @@ unsigned long temperatureTime;	//gat temp
 #define BTN2 3
 #define INPUT1 10
 #define INPUT2 11
+//How to detect signal rising/falling edge, see https://www.mylms.cz/kusy-kodu-k-arduinu/#edge_detection2
 bool presentButton1, presentButton2, presentInput1, presentInput2; //actual state of buttons and inputs
 bool lastButton1, lastButton2; //last state button s
 bool edgeButton1, edgeButton2; //edge state buttons
@@ -133,6 +137,7 @@ byte systemState;	//0 = show time/date/temp, other = menu
 byte showMode = 0;	//0 = time, 1 = date, 2 = temperature
 bool showDots;	//dots are shown
 bool pmDotEnable = false;	//pm dot is shown
+bool showText = false;	//some user text is shown
 
 //chars
 const uint64_t symbols[] = {
@@ -272,17 +277,16 @@ const uint64_t symbols[] = {
 #define char_v 55
 #define char_y 58
 
-
 byte fontCount = 5;	//how many fonts is used
 byte fontOffset = 60;	//count of symbols before 1st number
 
 //default values...but they are load from EEPROM
-byte bright = 7;
+byte bright = 7;	//brightness
 byte font = 1;	//do not set less than 1. symbols 0-19 are used for letters etc.
 byte dotStyle = 2;	//0 - off, 1 - on, 2 - blinking
 byte timeMode1224 = 1;	//12/24 hour mode 12 = 0, 24 = 1
-byte rotateFont1 = 0;	//font rotateing verticaly (one char)
-byte rotateFont2 = 0;	//font rotateing verticaly (all display)
+byte rotateFont1 = 0;	//font rotateing vertically (one char)
+byte rotateFont2 = 0;	//font rotateing vertically (all display)
 byte showDate = 0;	//how many second in one minute cycle is date shown
 byte showTemperature = 0;	//how many second in one minute cycle is temperature shown
 byte upsideDown = 0;	//us font Upside down
@@ -301,6 +305,7 @@ void setup() {
 	pinMode(INPUT1, INPUT_PULLUP);
 	pinMode(INPUT2, INPUT_PULLUP);
 
+	//LOAD DATA FROM EEPROM
 	bright = EEPROM.read(0);	//load light intensity from EEPROM
 	if (bright < 0 || bright > 15) {
 		//in case variable out of range
@@ -410,10 +415,13 @@ void loop() {
 			displayTime = presentTime;
 			GetRtc();		//get actual time
 
-			//show some message or time
+			ToggleMode();	//toggle mode time/date/temperature
+
+			//show message or time
 			if (presentInput1 && !presentInput2) {
 				//IN1 = 1, IN2 = 0
 				//MESSAGE 1 - blank display
+				showText = true;	//turn off colon, comma etc
 				DrawSymbol(3, char_space);	//space
 				DrawSymbol(2, char_space);	//space
 				DrawSymbol(1, char_space);	//space
@@ -422,6 +430,7 @@ void loop() {
 			else if (!presentInput1 && presentInput2) {
 				//IN1 = 0, IN2 = 1
 				//MESSAGE 1 - LMS!
+				showText = true;	//turn off colon, comma etc
 				DrawSymbol(3, char_L);	//L
 				DrawSymbol(2, char_M);	//M
 				DrawSymbol(1, char_S);	//S
@@ -430,6 +439,7 @@ void loop() {
 			else if (presentInput1 && presentInput2) {
 				//IN1 = 1, IN2 = 1
 				//MESSAGE 2 - version
+				showText = true;	//turn off colon, comma etc
 				DrawSymbol(3, char_v);	//v
 				DrawSymbol(2, versionMajor + fontOffset);
 				DrawSymbol(1, char_dot);	//:
@@ -438,22 +448,22 @@ void loop() {
 			else {
 				//IN1 = 0, IN2 = 0
 				//show time (or date, etc.)
+				showText = false;	//turn on colon, comma etc
 				WriteTime();	//write actual time (etc) to matrix display
 			}
 			
 		}
 
 		if (presentButton1 && presentButton2) {
-			systemState = 1;
-			//go to "pre"menu
+			systemState = 1;	//go to "premenu"
 		}
 		break;
 
 	case 1:
 		if (!presentButton1 && !presentButton2) {
 			//NEXT
-			GetRtc();		//get actual time (read time in 24h format - in menu is always 24h time format)
-			systemState++; //Go to menu
+			GetRtc();		//get actual time (read time in 24h format - in menu is always 24h time format used)
+			systemState++; //go to menu
 			DrawSymbol(3, char_space);	//space
 			DrawSymbol(2, char_space);	//space
 			DrawSymbol(1, char_space);	//space
@@ -468,7 +478,6 @@ void loop() {
 
 		if (edgeButton1) {
 			//rising edge detected
-
 			//NEXT
 			systemState++;
 			DrawSymbol(3, char_M);	//M
@@ -494,7 +503,6 @@ void loop() {
 
 		if (edgeButton1) {
 			//rising edge detected
-
 			//NEXT
 			systemState++;
 			DrawSymbol(3, char_y);	//y
@@ -518,7 +526,6 @@ void loop() {
 		//set YEAR
 		if (edgeButton1) {
 			//rising edge detected
-
 			//NEXT
 			systemState++;
 			DrawSymbol(3, char_m);	//m
@@ -854,7 +861,7 @@ void loop() {
 	case 14:
 		//menu 14
 		//set rotate FONT 2
-		//Rotate all display (verticaly)
+		//Rotate all display (vertically)
 		if (edgeButton1) {
 			//rising edge detected
 
@@ -977,41 +984,14 @@ void loop() {
 }
 
 void WriteTime() {
-	byte storedFont = font;	//store actual seting during MENU
+	byte storedFont = font;	//store actual setting during MENU
 
 	if (systemState > 0) {
 		//reserve font for menu
 		font = 1;
 	}
 
-	if (second == 0) {
-		//show time in 0 second
-		showMode = 0;
-	}
-
-	if (second == showTemperature && showTemperature > 0) {
-		//showtemp is now & showtemp is enabled 
-		showMode = 2;
-	}
-
-	if (second == showDate && showDate > 0) {
-		//showdate is now & showdate is enabled 
-		//date has priority
-		showMode = 1;
-	}
-
-	if (showTemperature == 60) {
-		//salways howtemp
-		showMode = 2;
-	}
-
-	if (showDate == 60) {
-		//always show date
-		//date has priority
-		showMode = 1;
-	}
-
-	//write time to matrix display in menu
+	//write hour to matrix display in menu
 	if (systemState == 2) {
 		//show hours in 24h format in menu (set hours)
 		DrawSymbol(2, (hour % 10) + (font * 10) + fontOffset - 10);
@@ -1021,7 +1001,7 @@ void WriteTime() {
 		pmDotEnable = false;	//hide PM dot
 	}
 
-	//write time to matrix display in menu
+	//write minute to matrix display in menu
 	if (systemState == 3) {
 		//show minute in menu
 		DrawSymbol(0, (minute % 10) + (font * 10) + fontOffset - 10);
@@ -1125,6 +1105,36 @@ void WriteTime() {
 	font = storedFont;
 }
 
+void ToggleMode() {
+	if (second == 0) {
+		//show time in 0 second
+		showMode = 0;
+	}
+
+	if (second == showTemperature && showTemperature > 0) {
+		//showtemp is now & showtemp is enabled 
+		showMode = 2;
+	}
+
+	if (second == showDate && showDate > 0) {
+		//showdate is now & showdate is enabled 
+		//date has priority
+		showMode = 1;
+	}
+
+	if (showTemperature == 60) {
+		//salways howtemp
+		showMode = 2;
+	}
+
+	if (showDate == 60) {
+		//always show date
+		//date has priority
+		showMode = 1;
+	}
+}
+
+
 void Intro() {
 	DrawSymbol(3, char_L);	//L
 	DrawSymbol(2, char_M);	//M
@@ -1147,16 +1157,16 @@ void DrawSymbol(byte adr, byte symbol) {
 		adr = 3 - adr;
 	}
 
-	byte j = 0;	//variable for upsidedown font turning
+	byte j = 0;	//variable for upside-down font turning
 
 	for (byte i = 0; i < 8; i++) {
 		j = i;
 		if (upsideDown == 1) {
-			//turn font upside down
+			//turn font upside down, if it's enabled
 			j = 7 - i;
 		}
 		
-		byte row = (symbols[symbol] >> i * 8) & 0xFF;	//just some magic
+		byte row = (symbols[symbol] >> i * 8) & 0xFF;	//just some magic - extract one row from all symbol
 
 		if (verticalMode == 1) {
 			//vertical mode
@@ -1164,8 +1174,9 @@ void DrawSymbol(byte adr, byte symbol) {
 
 			//blinking dots on display
 			//I have to draw "dots" during draw symbol. In other case it's blinking.
+			//all "dots" are disabled in show text mode
 			//Better variant would update symbol before draw - before FOR structure. Maybe in next version :)
-			if (adr == 2 && dotStyle > 0 && i == 7) {
+			if (adr == 2 && dotStyle > 0 && i == 7 && !showText) {
 				//colon
 				lc.setLed(adr, 1, 7, showDots);  //addr, row, column
 				lc.setLed(adr, 2, 7, showDots);
@@ -1173,7 +1184,7 @@ void DrawSymbol(byte adr, byte symbol) {
 				lc.setLed(adr, 6, 7, showDots);
 			}
 
-			if (adr == 2 && systemState == 0 && (showMode == 1 || showMode == 2)) {
+			if (adr == 2 && systemState == 0 && (showMode == 1 || showMode == 2) && !showText) {
 				//date and temperature point
 				lc.setLed(adr, 1, 7, true);
 				lc.setLed(adr, 2, 7, true);
@@ -1185,8 +1196,9 @@ void DrawSymbol(byte adr, byte symbol) {
 
 			//blinking dots on display
 			//I have to draw "dots" during draw symbol. In other case it's blinking.
+			//all "dots" are disabled in show text mode
 			//Better variant would update symbol before draw - before FOR structure. Maybe in next version :)
-			if (adr == 2 && dotStyle > 0) {
+			if (adr == 2 && dotStyle > 0 && !showText) {
 				//colon
 				if (i == 1) lc.setLed(adr, 1, 7, showDots);  //addr, row, column
 				if (i == 2) lc.setLed(adr, 2, 7, showDots);
@@ -1194,14 +1206,14 @@ void DrawSymbol(byte adr, byte symbol) {
 				if (i == 6) lc.setLed(adr, 6, 7, showDots);
 			}
 
-			if (adr == 2 && systemState == 0 && (showMode == 1 || showMode == 2)) {
+			if (adr == 2 && systemState == 0 && (showMode == 1 || showMode == 2) && !showText) {
 				//date and temperature point
 				if (i == 5) lc.setLed(adr, 5, 7, true);
 				if (i == 6) lc.setLed(adr, 6, 7, true);
 			}
 		}
 		
-		if (adr == 0) {
+		if (adr == 0 && !showText) {
 			//PM point
 			lc.setLed(0, 7, 7, pmDotEnable);
 		}
@@ -1209,7 +1221,7 @@ void DrawSymbol(byte adr, byte symbol) {
 }
 
 byte ByteRevers(byte in) {
-	//font rotateing
+	//font rotating
 	if ((rotateFont1 == 1 && verticalMode == 0) || (rotateFont1 == 0 && verticalMode == 1)) {
 		//do not rotate
 		return(in);
