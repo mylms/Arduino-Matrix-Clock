@@ -12,7 +12,7 @@ See video: https://youtu.be/HDweqN9cDNA
 
 In v1.5 it's possible to invert display ("i" parameter) and control clock by a IR remote control. You have to change IR Remote control codes in sketch to your codes. You can use IrTest.ino for test you receiver and get your remote control codes.
 
-You can control clock by the buttons, Serial port and/or IR remote control. If you do not want to use IR remote control you do not have to connect VS 838...
+You can control clock by the buttons, Serial port and/or IR remote control. If you do not want to use IR remote control you do not have to connect VS 838...or you can use version 1.4.
 
 
 **Menu:**
