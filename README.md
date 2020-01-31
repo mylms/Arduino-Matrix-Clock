@@ -1,20 +1,21 @@
 # Arduino-Matrix-Clock v1.5
 
-Simple Arduino Clock with LED matrix display 32 x 8 pix.
+**Simple Arduino Clock with LED matrix display 32 x 8 pix.**
 
-In this sketch are used some external libraries. You have to download and instal them:
-LED CONTROL: https://github.com/wayoda/LedControl
+In this sketch are used some external libraries. You have to download and instal them:<br>
+LED CONTROL: https://github.com/wayoda/LedControl<br>
 IR REMOTE CONTROL: https://github.com/z3t0/Arduino-IRremote
 
 For more info and discussion see https://www.mylms.cz/arduino-hodiny-s-maticovym-displejem/ You can use forum there. Please write in english.
 
 See video: https://youtu.be/HDweqN9cDNA
 
-In v1.5 it's possible to invert display and control clock by a IR remote control. You have to change IR Remote control codes in sketch to your codes. You can use...
+In v1.5 it's possible to invert display ("i" parameter) and control clock by a IR remote control. You have to change IR Remote control codes in sketch to your codes. You can use IrTest.ino for test you receiver and get your remote control codes.
 
-You can control clock by the buttons, Serial port and/or IR remote control.
+You can control clock by the buttons, Serial port and/or IR remote control. If you do not want to use IR remote control you do not have to connect VS 838...
 
-Menu:
+
+**Menu:**
 - H: Hour
 - M: Minute
 
@@ -35,14 +36,15 @@ Menu:
 - i: Invert display (00 - no invert, 01 - invert display)
 - Strt: Reset second (set to 0) after release the button and show actual time
 
-You need:
+
+**You need:**
 - Arduino Nano
 - DS3231 module
 - 4x LED matrix with MAX7219 driver (used LedControl library)
 - 2x button (
 
 
-For use external power supply (no USB) you need:
+**For use external power supply (no USB) you need:**
 - 1N4148 diode
 - 5V power supply
 
