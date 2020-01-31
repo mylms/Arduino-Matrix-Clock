@@ -41,7 +41,8 @@ You can control clock by the buttons, Serial port and/or IR remote control. If y
 - Arduino Nano
 - DS3231 module
 - 4x LED matrix with MAX7219 driver (used LedControl library)
-- 2x button (
+- 2x button for control (and more 2 buttons for inputs - for show message)
+- VS 838 IR receiver
 
 
 **For use external power supply (no USB) you need:**
