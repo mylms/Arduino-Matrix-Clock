@@ -1,14 +1,19 @@
 /*
 Name:		ArduinoMatrixClock.ino
 Created:	16.01.2018 20:56:49
-Last rev.:	15.08.2019
-Version:	1.4
+Last rev.:	31.01.2020
+Version:	1.5
 Author:		Petan (www.mylms.cz)
 */
 
 /*
 https://www.mylms.cz/text-arduino-hodiny-s-maticovym-displejem/
 https://github.com/mylms/Arduino-Matrix-Clock
+
+There are used two libraries. You have to download and instal them:
+LED CONTROL: https://github.com/wayoda/LedControl
+IR REMOTE CONTROL: https://github.com/z3t0/Arduino-IRremote
+
 
 D2 - BTN 1 (set internal_pullup)
 D3 – BTN 2 (set internal_pullup)
@@ -17,6 +22,7 @@ D11 - INPUT2 (set internal_pullup)
 D4 – matrix display, pin DIN
 D5 – matrix display, pin CLK
 D6 – matrix display, pin CS
+D7 - IR remote control receiver
 A4 – RTC module, pin SDA
 A5 – RTC module, pin SCL
 GND – common for all modules
@@ -28,47 +34,62 @@ If clock shows 45 hours, check your RTC module (check address, change battery, c
 
 
 HOW TO USE
-Press both buttons at the same time, then release. Now, you are in menu mode.
+Press both buttons at the same time, then release (or button#3 on remote control). Now, you are in menu mode.
 By pressing BTN1 you change menu item, By pressing BTN2 change value of selected item.
 H = hour, M = minute,
 y = year, m = month, d = day,
-AM/PM = time format 12/24 h, 
-F = font, : = dots, B = brightness, RI = rotate font 1, RII = rotate font 2, U = rotate font upside down, v = vertical mode
-Strt = start (second are set to 0 after release the button)
+/ = AM/PM = time format 12/24 h, 
+F = font, : = dots, B = brightness, R = rotate font 1, r = rotate display 2, U = rotate font upside down, v = vertical mode, i = invert display
+Strt = start (second is set to 0 after release the button)
 
-How the clock show time (T), date (D) and temerature (t)
-There are few examples
+How the clock show time (T), date (D) and temerature (t)?
+There are few examples:
 
 Show only time (T) (all 60 seconds). Temperature and date are set to 0
+D = 0, t = 0
 0TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT60 second
 
 Date (D) is set to 40 second
+D = 40, t = 0
 0TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT DDDDDDDDDD DDDDDDDDDD60 second
 
 Date (D) is set to 30, temperature (t) is set to 40
+D = 30, t = 40
 0TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT DDDDDDDDDD tttttttttt tttttttttt60 second
 
+Temperature (t) is set to 30, date (D) is set to 40
+D = 30, t = 40
+0TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT tttttttttt DDDDDDDDDD DDDDDDDDDD60 second
+
 Date (D) and temperature (t) are set to 40. Date has priority. Temperature (t) will not show
+D = 40, t = 40
 0TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT DDDDDDDDDD DDDDDDDDDD60 second
 
-Date (D) and temperature (t) is set to 60. Date has priority. Time (T) and temperature (t) will not show
+Date (D) and temperature (t) is set to 0. Date has priority. Time (T) and temperature (t) will not show
+D = 0, t = 0
 0DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD60 second
 
 
 SHOW MESSAGE
 In v1.4 you can show some message (only 4 chars). If you connect input 10 and/or 11 to GND you can show one of them.
-Text of message you can upgrade only in this code, see row around 400 (look for '//show some message or time').
+You can upgrade text of message only in this code, see row around 400 (look for '//show some message or time').
 0 = input is not connect to GND; 1 = input is connect to GND
 IN10	|	IN11	|	OUT
-0		|	0		|	show time, date etc.
+0		|	0		|	show time, date etc. (no message)
 0		|	1		|	message 1
 1		|	0		|	message 2
 1		|	1		|	message 3
 
 
+IR REMOTE CONTROL
+In v1.5 you can control clock by IR remote control.
+IR remote control just simulate press the buttons. There are three inputs: button1, button2 and bothButtons.
+Please set the codes of buttons - look for "button#1 code" etc.
+
+
 SERIAL COMMUNICATION (9600b)
 You have to send three chars. 1st is function, other two are digits
-XNN -> X = function; NN = number 00 to 99 (two digits are nessesary)
+XNN -> X = function; NN = number 00 to 99 (two digits are nessesary!)
 Command is case sensitive!! R01 and r01 are different commands!
 
 y = year (00 - 99)
@@ -80,8 +101,8 @@ H = hour (0 - 23)
 M = minute (0 - 59)
 S = second (0 - 59)
 
-D = show date (what second is date shown; 00 = newer, 60 = always)
-t = show temperature (what second is temperature shown 00 = newer, 60 = always)
+D = show date (which second is date shown; 00 = never, 60 = always)
+t = show temperature (which second is temperature shown 00 = never, 60 = always)
 R = rotate font 1
 r = rotate font 2
 U = rotate font UpsideDown
@@ -90,9 +111,11 @@ f = font (1 - 5)
 / = 12/24 hour format (/00 = 12h; /01 = 24h)
 : = dot style (:00 = not shown; :01 = always lit; :02 = blinking)
 v = vertical mode (v00 = standar horizontal; v01 = vertical mode)
+i = invert display (i00 = no invert, i01 = invert display)
 
 */
 
+#include <IRremote.h>
 #include <EEPROM.h>
 #include <Wire.h>
 #include <LedControl.h>
@@ -104,14 +127,24 @@ const byte temperatureOffset = 97;	//99 = -1, 100 = 0, 101 = 1 (only integer val
 
 //OTHERS
 const byte versionMajor = 1;
-const byte versionMinor = 4;
+const byte versionMinor = 5;
 
 //MATRIX DISPLAY
 byte devices = 4;	//count of displays
 LedControl lc = LedControl(4, 5, 6, devices);	//DIN, CLK, CS, count of displays
 
+//IR REMOTE CONTROL
+IRrecv irReceiver(7);	//IR receiver pin
+decode_results irResult;	//received char
+//YOU CAN CHANGE THIS VALUES TO CHANGE WHAT BUTTON FROM REMOTE CONTROL ARE USED
+//You can upload test firmware to your clock - code of received symbols will send to PC via serial port
+#define IRCODE_BUTTON1 0xFF22DD			//IR REMOTE CONTROL - button#1 code
+#define IRCODE_BUTTON2 0xFFC23D			//IR REMOTE CONTROL - button#2 code
+#define IRCODE_BUTTON1AND2 0xFF02FD		//IR REMOTE CONTROL - both buttons code (button#3 code)
+
+
 //RTC DS3231
-//How to read time from RTC without library, see https://www.mylms.cz/text-kusy-kodu-k-arduinu/#ds3231
+//How to read time from RTC DS3231 module without library, see https://www.mylms.cz/text-kusy-kodu-k-arduinu/#ds3231
 #define DS3231_I2C_ADDRESS 0x68 //address of DS3231 module
 byte second, minute, hour, dayOfWeek, dayOfMonth, month, year; //global variables for time
 byte currentTemperatureH = 0;	//temperature in degC
@@ -140,6 +173,7 @@ bool pmDotEnable = false;	//pm dot is shown
 bool showText = false;	//some user text is shown
 
 //chars
+//if you want to make new symbol see https://xantorohara.github.io/led-matrix-editor/
 const uint64_t symbols[] = {
 	0x0000000000000000,	//0 - space
 	0x0000000000000000,	//1 - reserve
@@ -253,7 +287,7 @@ const uint64_t symbols[] = {
 	0x003c20203c24243c
 };
 
-//some chars for my use...you can add
+//some chars for my use...you can add more
 #define char_space 0
 #define char_exc 5
 #define char_dot 6
@@ -271,35 +305,38 @@ const uint64_t symbols[] = {
 #define char_b 35
 #define char_d 37
 #define char_f 39
+#define char_i 42
 #define char_m 46
 #define char_r 51
 #define char_t 53
 #define char_v 55
 #define char_y 58
 
-byte fontCount = 5;	//how many fonts is used
+byte fontCount = 5;	//how many fonts are used
 byte fontOffset = 60;	//count of symbols before 1st number
 
-//default values...but they are load from EEPROM
+//default values... but they are load from EEPROM
 byte bright = 7;	//brightness
-byte font = 1;	//do not set less than 1. symbols 0-19 are used for letters etc.
+byte font = 1;	//do not set less than 1. symbols 0-59 are used for letters etc.
 byte dotStyle = 2;	//0 - off, 1 - on, 2 - blinking
 byte timeMode1224 = 1;	//12/24 hour mode 12 = 0, 24 = 1
 byte rotateFont1 = 0;	//font rotateing vertically (one char)
 byte rotateFont2 = 0;	//font rotateing vertically (all display)
 byte showDate = 0;	//how many second in one minute cycle is date shown
 byte showTemperature = 0;	//how many second in one minute cycle is temperature shown
-byte upsideDown = 0;	//us font Upside down
+byte upsideDown = 0;	//font Upside down
 byte verticalMode = 0;	//clock is vertical
+byte invertDisplay = 0;	//display is inverted
 
 
 void setup() {
 	//COMMUNICATION
 	Wire.begin(); //start I2C communication
+	irReceiver.enableIRIn();	//IR remote control
 	Serial.begin(9600);	//for communication with PC
 
 	//IO
-	//there is internal pull-up used - read variables are negated
+	//there are internal pull-ups used - read variables are negated
 	pinMode(BTN1, INPUT_PULLUP);
 	pinMode(BTN2, INPUT_PULLUP);
 	pinMode(INPUT1, INPUT_PULLUP);
@@ -308,65 +345,71 @@ void setup() {
 	//LOAD DATA FROM EEPROM
 	bright = EEPROM.read(0);	//load light intensity from EEPROM
 	if (bright < 0 || bright > 15) {
-		//in case variable out of range
+		//in case variable is out of range
 		bright = 7;
 	}
 
 	font = EEPROM.read(1);	//load font style from EEPROM
 	if (font < 1 || font > fontCount) {
-		//in case variable out of range
+		//in case variable is out of range
 		font = 1;
 	}
 
 	dotStyle = EEPROM.read(2);	//load dot style from EEPROM
 	if (dotStyle < 0 || dotStyle > 2) {
-		//in case variable out of range
+		//in case variable is out of range
 		dotStyle = 2;
 	}
 
 	showTemperature = EEPROM.read(3);	//load temperature time EEPROM
 	if (showTemperature < 0 || showTemperature > 60) {
-		//in case variable out of range
+		//in case variable is out of range
 		showTemperature = 0;
 	}
 
 	rotateFont1 = EEPROM.read(4);	//load rotate font 1 from EEPROM
 	if (rotateFont1 < 0 || rotateFont1 > 1) {
-		//in case variable out of range
+		//in case variable is out of range
 		rotateFont1 = 0;
 	}
 
 	rotateFont2 = EEPROM.read(5);	//load rotate font 2 from EEPROM
 	if (rotateFont2 < 0 || rotateFont2 > 1) {
-		//in case variable out of range
+		//in case variable is out of range
 		rotateFont2 = 0;
 	}
 
 	timeMode1224 = EEPROM.read(6);	//load 12/24 hour mode from EEPROM
 	if (timeMode1224 < 0 || timeMode1224 > 1) {
-		//in case variable out of range
+		//in case variable is out of range
 		timeMode1224 = 1;
 	}
 
 	showDate = EEPROM.read(7);	//load date time
 	if (showDate < 0 || showDate > 60) {
-		//in case variable out of range
+		//in case variable is out of range
 		showDate = 0;
 	}
 
 	upsideDown = EEPROM.read(8);	//load upsideDown state from EEPROM
 	if (upsideDown < 0 || upsideDown > 1) {
-		//in case variable out of range
+		//in case variable is out of range
 		upsideDown = 0;
 	}
 
 	verticalMode = EEPROM.read(9);	//load vertical mode from EEPROM
 	if (verticalMode < 0 || verticalMode > 1) {
-		//in case variable out of range
+		//in case variable is out of range
 		verticalMode = 0;
 	}
 
-	delay(10);	//just small delay...I thing I have had add it for correct function of display
+	invertDisplay = EEPROM.read(10);	//load onvert font from EEPROM
+	if (invertDisplay < 0 || invertDisplay > 1) {
+		//in case variable is out of range
+		invertDisplay = 0;
+	}
+
+	delay(10);	//just small delay before start...I thing I have had add it for correct function of display
 
 	//SET ALL DISPLAYS
 	for (byte address = 0; address<devices; address++) {
@@ -394,6 +437,33 @@ void loop() {
 	presentButton2 = !digitalRead(BTN2);
 	presentInput1 = !digitalRead(INPUT1);
 	presentInput2 = !digitalRead(INPUT2);
+
+	//receive code from IR remote control
+	if (irReceiver.decode(&irResult)) {
+		unsigned long value = irResult.value;
+
+		if (value == IRCODE_BUTTON1) {
+			//simulate button 1
+			lc.setLed(3, 7, 1, true);	//show point
+			presentButton1 = true;	//simulate press btn1
+		}
+
+		if (value == IRCODE_BUTTON2) {
+			//simulate button 2
+			lc.setLed(3, 7, 1, true);	//show point
+			presentButton2 = true;	//simulate press btn2
+		}
+
+		if (value == IRCODE_BUTTON1AND2) {
+			//simulate both button
+			lc.setLed(3, 7, 1, true);	//show point
+			presentButton1 = true;	//simulate press btn1
+			presentButton2 = true;	//simulate press btn2
+		}
+
+		irReceiver.resume();	//receive next value
+		delay(10);	//some small delay
+	}
 
 	//edge detection
 	edgeButton1 = (presentButton1 ^ lastButton1) & !presentButton1;
@@ -429,7 +499,7 @@ void loop() {
 			}
 			else if (!presentInput1 && presentInput2) {
 				//IN1 = 0, IN2 = 1
-				//MESSAGE 1 - LMS!
+				//MESSAGE 2 - LMS!
 				showText = true;	//turn off colon, comma etc
 				DrawSymbol(3, char_L);	//L
 				DrawSymbol(2, char_M);	//M
@@ -438,7 +508,7 @@ void loop() {
 			}
 			else if (presentInput1 && presentInput2) {
 				//IN1 = 1, IN2 = 1
-				//MESSAGE 2 - version
+				//MESSAGE 3 - version
 				showText = true;	//turn off colon, comma etc
 				DrawSymbol(3, char_v);	//v
 				DrawSymbol(2, versionMajor + fontOffset);
@@ -449,7 +519,7 @@ void loop() {
 				//IN1 = 0, IN2 = 0
 				//show time (or date, etc.)
 				showText = false;	//turn on colon, comma etc
-				WriteTime();	//write actual time (etc) to matrix display
+				WriteTime();	//write actual time (etc.) to matrix display
 			}
 			
 		}
@@ -923,7 +993,7 @@ void loop() {
 		break;
 
 	case 16:
-		//menu 15
+		//menu 16
 		//set vertical mode
 		//Rotate all display (horizontaly)
 		if (edgeButton1) {
@@ -931,10 +1001,10 @@ void loop() {
 
 			//NEXT
 			systemState++;
-			DrawSymbol(3, char_S);	//S
-			DrawSymbol(2, char_t);	//t
-			DrawSymbol(1, char_r);	//r
-			DrawSymbol(0, char_t);	//t
+			DrawSymbol(3, char_i);	//i
+			DrawSymbol(2, char_space);	//space
+			DrawSymbol(1, (invertDisplay / 10) + fontOffset);	//actual font invert state
+			DrawSymbol(0, (invertDisplay % 10) + fontOffset);	//actual font invert state
 		}
 
 		if (edgeButton2) {
@@ -956,6 +1026,37 @@ void loop() {
 
 	case 17:
 		//menu 17
+		//set invert display
+		if (edgeButton1) {
+			//rising edge detected
+
+			//NEXT
+			systemState++;
+			DrawSymbol(3, char_S);	//S
+			DrawSymbol(2, char_t);	//t
+			DrawSymbol(1, char_r);	//r
+			DrawSymbol(0, char_t);	//t
+		}
+
+		if (edgeButton2) {
+			//rising edge detected
+			//set font rotateing
+			invertDisplay++;
+			if (invertDisplay > 1) {
+				invertDisplay = 0;
+			}
+
+			DrawSymbol(3, char_i);	//S
+			DrawSymbol(2, char_space);	//t
+			DrawSymbol(1, (invertDisplay / 10) + fontOffset);	//actual rotate font 2
+			DrawSymbol(0, (invertDisplay % 10) + fontOffset);	//actual rotate font 2
+
+			delay(25);
+		}
+		break;
+
+	case 18:
+		//menu 18
 		//EXIT
 		if (edgeButton1) {
 			//rising edge detected
@@ -971,6 +1072,7 @@ void loop() {
 			EEPROM.write(7, showDate);	//store date time to eeprom
 			EEPROM.write(8, upsideDown);	//store upsideDown rotate to EEPROM
 			EEPROM.write(9, verticalMode);	//store vertical mode to EEPROM
+			EEPROM.write(10, invertDisplay);	//store invertFont to EEPROM
 
 			systemState = 0;	//show actual time
 		}
@@ -988,10 +1090,11 @@ void WriteTime() {
 
 	if (systemState > 0) {
 		//reserve font for menu
+		//in menu 1st font is used
 		font = 1;
 	}
 
-	//write hour to matrix display in menu
+	//write hour to matrix display in menu (set hour)
 	if (systemState == 2) {
 		//show hours in 24h format in menu (set hours)
 		DrawSymbol(2, (hour % 10) + (font * 10) + fontOffset - 10);
@@ -1001,7 +1104,7 @@ void WriteTime() {
 		pmDotEnable = false;	//hide PM dot
 	}
 
-	//write minute to matrix display in menu
+	//write minute to matrix display in menu (set minute)
 	if (systemState == 3) {
 		//show minute in menu
 		DrawSymbol(0, (minute % 10) + (font * 10) + fontOffset - 10);
@@ -1053,11 +1156,11 @@ void WriteTime() {
 				}
 			}
 
-			//hour
+			//hour (upper display)
 			DrawSymbol(2, (hour % 10) + (font * 10) + fontOffset - 10);
 			DrawSymbol(3, (hour / 10) + (font * 10) + fontOffset - 10);
 
-			//minute
+			//minute (upper display)
 			DrawSymbol(0, (minute % 10) + (font * 10) + fontOffset - 10);
 			DrawSymbol(1, (minute / 10) + (font * 10) + fontOffset - 10);
 			break;
@@ -1102,17 +1205,20 @@ void WriteTime() {
 
 	}
 
-	font = storedFont;
+	font = storedFont;	//turn bact to standard font (if it's changed)
 }
 
 void ToggleMode() {
+	//this function must be call every second because it change what to show on display
+	//0 - time; 1 - date, 2 - temperature
+
 	if (second == 0) {
 		//show time in 0 second
 		showMode = 0;
 	}
 
 	if (second == showTemperature && showTemperature > 0) {
-		//showtemp is now & showtemp is enabled 
+		//show temperature is now & showtemp is enabled 
 		showMode = 2;
 	}
 
@@ -1123,7 +1229,7 @@ void ToggleMode() {
 	}
 
 	if (showTemperature == 60) {
-		//salways howtemp
+		//always show temperature
 		showMode = 2;
 	}
 
@@ -1167,6 +1273,7 @@ void DrawSymbol(byte adr, byte symbol) {
 		}
 		
 		byte row = (symbols[symbol] >> i * 8) & 0xFF;	//just some magic - extract one row from all symbol
+		if(invertDisplay) row = ~row;	//invert font
 
 		if (verticalMode == 1) {
 			//vertical mode
@@ -1240,18 +1347,18 @@ byte ByteRevers(byte in) {
 	return(out);
 }
 
-//Set RTC
+//set RTC
 void SetRtc(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year) {	
 	Wire.beginTransmission(DS3231_I2C_ADDRESS);
 	Wire.write(0); //set 0 to first register
 
-	Wire.write(decToBcd(second)); //set second
-	Wire.write(decToBcd(minute)); //set minutes 
-	Wire.write(decToBcd(hour)); //set hours
-	Wire.write(decToBcd(dayOfWeek)); //set day of week (1=su, 2=mo, 3=tu) 
-	Wire.write(decToBcd(dayOfMonth)); //set day of month
-	Wire.write(decToBcd(month)); //set month
-	Wire.write(decToBcd(year)); //set year
+	Wire.write(DecToBcd(second)); //set second
+	Wire.write(DecToBcd(minute)); //set minutes 
+	Wire.write(DecToBcd(hour)); //set hours
+	Wire.write(DecToBcd(dayOfWeek)); //set day of week (1=su, 2=mo, 3=tu) 
+	Wire.write(DecToBcd(dayOfMonth)); //set day of month
+	Wire.write(DecToBcd(month)); //set month
+	Wire.write(DecToBcd(year)); //set year
 	Wire.endTransmission();
 }
 
@@ -1262,15 +1369,16 @@ void GetRtc() {
 	Wire.endTransmission();
 
 	Wire.requestFrom(DS3231_I2C_ADDRESS, 7);	//request - 7 bytes from RTC
-	second = bcdToDec(Wire.read() & 0x7f);
-	minute = bcdToDec(Wire.read());
-	hour = bcdToDec(Wire.read() & 0x3f);
-	dayOfWeek = bcdToDec(Wire.read());
-	dayOfMonth = bcdToDec(Wire.read());
-	month = bcdToDec(Wire.read());
-	year = bcdToDec(Wire.read());
+	second = BcdToDec(Wire.read() & 0x7f);
+	minute = BcdToDec(Wire.read());
+	hour = BcdToDec(Wire.read() & 0x3f);
+	dayOfWeek = BcdToDec(Wire.read());
+	dayOfMonth = BcdToDec(Wire.read());
+	month = BcdToDec(Wire.read());
+	year = BcdToDec(Wire.read());
 }
 
+//read temperature from RTC module
 void GetTemperature() {
 	Wire.beginTransmission(DS3231_I2C_ADDRESS);
 	Wire.write(0x11);
@@ -1290,19 +1398,19 @@ void GetTemperature() {
 }
 
 //conversion Dec to BCD 
-byte decToBcd(byte val) {
+byte DecToBcd(byte val) {
 	return((val / 10 * 16) + (val % 10));
 }
 
 //conversion BCD to Dec 
-byte bcdToDec(byte val) {
+byte BcdToDec(byte val) {
 	return((val / 16 * 10) + (val % 16));
 }
 
 //serial communication with PC
 void SerialComm() {
-	//first char - type of data
-	//second and third char - data
+	//first char - data type
+	//second and third char - data value
 	//there are used only "printable" characters
 
 	if (Serial.available() > 0) {
@@ -1435,6 +1543,19 @@ void SerialComm() {
 			lc.setLed(3, 7, 0, true);	//show setting dot
 			EEPROM.write(1, font);	//save
 			break;
+		case 105:
+			//inver font 105 = i
+			if (receivedData > 1) {
+				receivedData = 1;
+			}
+
+			if (receivedData == 0) {
+				receivedData = 1;
+			}
+			invertDisplay = receivedData;
+			lc.setLed(3, 7, 0, true);	//show setting dot
+			EEPROM.write(10, invertDisplay);	//save
+			break;
 		case 109:
 			//month 109 = m
 			if (receivedData > 12) {
@@ -1489,82 +1610,8 @@ void SerialComm() {
 		case 63:
 			//get data ? = 63
 			Serial.println("");
+			Serial.println("Please see github for more information.");
 			Serial.println("https://github.com/mylms/Arduino-Matrix-Clock");
-			Serial.print("v");
-			Serial.print(versionMajor);
-			Serial.print(".");
-			Serial.print(versionMinor);
-			Serial.println("");
-			Serial.println("");
-			Serial.println("Date (y/m/d): ");
-			Serial.println(year);
-			Serial.println(month);
-			Serial.println(dayOfMonth);
-			Serial.println(dayOfWeek);
-
-			Serial.println("");
-			Serial.println("Time (H/M/S): ");
-			Serial.println(hour);
-			Serial.println(minute);
-			Serial.println(second);
-
-			Serial.println("");
-			Serial.println("Temperature (read only): ");
-			Serial.print(currentTemperatureH);
-			switch (currentTemperatureL) {
-			case 255:
-				Serial.println(",75");
-				break;
-			case 128:
-				Serial.println(",5");
-				break;
-			case 64:
-				Serial.println(",25");
-				break;
-			default:
-				Serial.println(",0");
-				break;
-			}
-
-			Serial.println("");
-			Serial.println("Show date (D 00-60): ");
-			Serial.println(showDate);
-
-			Serial.println("");
-			Serial.println("Show temperature (t 00-60): ");
-			Serial.println(showTemperature);
-
-			Serial.println("");
-			Serial.println("Font rotate (R 00-01): ");
-			Serial.println(rotateFont1);
-
-			Serial.println("");
-			Serial.println("Display rotate (r 00-01): ");
-			Serial.println(rotateFont2);
-
-			Serial.println("");
-			Serial.println("UpsideDown rotate (U 00-01): ");
-			Serial.println(upsideDown);
-
-			Serial.println("");
-			Serial.println("Brightness (b 00-15): ");
-			Serial.println(bright);
-
-			Serial.println("");
-			Serial.println("Font (f 00-05): ");
-			Serial.println(font);
-
-			Serial.println("");
-			Serial.println("12/24h mode (/ 00-01): ");
-			Serial.println(timeMode1224);
-
-			Serial.println("");
-			Serial.println("Dot style (: 00-02): ");
-			Serial.println(dotStyle);
-
-			Serial.println("");
-			Serial.println("Vertical mode (v 00-01): ");
-			Serial.println(verticalMode);
 			break;
 		}
 		//flush serial data
