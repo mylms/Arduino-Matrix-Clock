@@ -124,7 +124,6 @@ i = invert display (i00 = no invert, i01 = invert display)
 //Example: Real temperature is 23°C. Clock shows 26°C. Difference is -3°C. You have to change value to 100 - 3 = 97
 const byte temperatureOffset = 97;	//99 = -1, 100 = 0, 101 = 1 (only integer values)
 
-
 //OTHERS
 const byte versionMajor = 1;
 const byte versionMinor = 5;
@@ -141,7 +140,6 @@ decode_results irResult;	//received char
 #define IRCODE_BUTTON1 0xFF22DD			//IR REMOTE CONTROL - button#1 code
 #define IRCODE_BUTTON2 0xFFC23D			//IR REMOTE CONTROL - button#2 code
 #define IRCODE_BUTTON1AND2 0xFF02FD		//IR REMOTE CONTROL - both buttons code (button#3 code)
-
 
 //RTC DS3231
 //How to read time from RTC DS3231 module without library, see https://www.mylms.cz/text-kusy-kodu-k-arduinu/#ds3231
