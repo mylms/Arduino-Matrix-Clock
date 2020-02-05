@@ -10,7 +10,8 @@ For more info and discussion see https://www.mylms.cz/arduino-hodiny-s-maticovym
 
 See video: https://youtu.be/HDweqN9cDNA
 
-In v1.5 it's possible to invert display ("i" parameter) and control clock by a IR remote control. You have to change IR Remote control codes in sketch to your codes. You can use IrTest.ino for test you receiver and get your remote control codes.
+In v1.5 it's possible to invert display ("i" parameter) and control clock by a IR remote control. You have to change IR Remote control codes in sketch to your codes - see picture. You can use IrTest.ino for test you receiver and get your remote control codes.
+![alt Remote control codes](https://www.mylms.cz/wp-content/uploads/2020/02/komentar-1548.png)
 
 You can control clock by the buttons, Serial port and/or IR remote control. If you do not want to use IR remote control you do not have to connect VS 838...or you can use version 1.4.
 
