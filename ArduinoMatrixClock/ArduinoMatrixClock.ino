@@ -135,7 +135,7 @@ LedControl lc = LedControl(4, 5, 6, devices);	//DIN, CLK, CS, count of displays
 //IR REMOTE CONTROL
 IRrecv irReceiver(7);	//IR receiver pin
 decode_results irResult;	//received char
-//YOU CAN CHANGE THIS VALUES TO CHANGE WHAT BUTTON FROM REMOTE CONTROL ARE USED
+//YOU CAN CHANGE THIS VALUES TO CHANGE WHICH BUTTONS FROM REMOTE CONTROL ARE USED
 //You can upload test firmware to your clock - code of received symbols will send to PC via serial port
 #define IRCODE_BUTTON1 0xFF22DD			//IR REMOTE CONTROL - button#1 code
 #define IRCODE_BUTTON2 0xFFC23D			//IR REMOTE CONTROL - button#2 code
