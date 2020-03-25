@@ -424,7 +424,7 @@ void setup() {
 	*/
 
 	Intro();	//show LMS! and version
-	Serial.println("Send '?' for help");
+	Serial.println(F("Send '?' for help"));
 
 	GetTemperature();	//just for start
 }
@@ -1607,9 +1607,9 @@ void SerialComm() {
 			break;
 		case 63:
 			//get data ? = 63
-			Serial.println("");
-			Serial.println("Please see github for more information.");
-			Serial.println("https://github.com/mylms/Arduino-Matrix-Clock");
+			Serial.println(F(""));
+			Serial.println(F("Please see github for more information."));
+			Serial.println(F("https://github.com/mylms/Arduino-Matrix-Clock"));
 			break;
 		}
 		//flush serial data
