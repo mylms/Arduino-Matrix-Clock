@@ -1544,11 +1544,7 @@ void SerialComm() {
 		case 105:
 			//inver font 105 = i
 			if (receivedData > 1) {
-				receivedData = 1;
-			}
-
-			if (receivedData == 0) {
-				receivedData = 1;
+				receivedData = 0;
 			}
 			invertDisplay = receivedData;
 			lc.setLed(3, 7, 0, true);	//show setting dot
