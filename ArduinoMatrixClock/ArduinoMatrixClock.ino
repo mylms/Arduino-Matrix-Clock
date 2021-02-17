@@ -66,7 +66,7 @@ D = 40, t = 40
 0TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT DDDDDDDDDD DDDDDDDDDD60 second
 
 Date (D) and temperature (t) is set to 0. Date has priority. Time (T) and temperature (t) will not show
-D = 0, t = 0
+D = 1, t = 1
 0DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD60 second
 
 
