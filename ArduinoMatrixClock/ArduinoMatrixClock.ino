@@ -12,7 +12,7 @@ https://github.com/mylms/Arduino-Matrix-Clock
 
 There are used two libraries. You have to download and instal them:
 LED CONTROL: https://github.com/wayoda/LedControl
-IR REMOTE CONTROL (use version 2.0.1) : https://github.com/Arduino-IRremote/Arduino-IRremote/tree/2.0.1
+IR REMOTE CONTROL (use version 2.0.1): https://github.com/Arduino-IRremote/Arduino-IRremote/tree/2.0.1
 
 
 D2 - BTN 1 (set internal_pullup)
