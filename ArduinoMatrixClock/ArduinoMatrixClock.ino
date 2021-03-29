@@ -12,7 +12,7 @@ https://github.com/mylms/Arduino-Matrix-Clock
 
 There are used two libraries. You have to download and instal them:
 LED CONTROL: https://github.com/wayoda/LedControl
-IR REMOTE CONTROL: https://github.com/z3t0/Arduino-IRremote
+IR REMOTE CONTROL (use version 2.0.1) : https://github.com/Arduino-IRremote/Arduino-IRremote/tree/2.0.1
 
 
 D2 - BTN 1 (set internal_pullup)
@@ -65,7 +65,7 @@ Date (D) and temperature (t) are set to 40. Date has priority. Temperature (t) w
 D = 40, t = 40
 0TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT TTTTTTTTTT DDDDDDDDDD DDDDDDDDDD60 second
 
-Date (D) and temperature (t) is set to 0. Date has priority. Time (T) and temperature (t) will not show
+Date (D) and temperature (t) are set to 1. Date has priority. Time (T) and temperature (t) will not show
 D = 1, t = 1
 0DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD DDDDDDDDDD60 second
 
